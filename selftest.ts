@@ -10,14 +10,21 @@ import {
   destinationPoint,
   generateLoopWaypoints,
   generateOneWayWaypoints,
+  generateTurnaroundPoint,
+  bearingDeg,
   haversineM,
+  outAndBack,
   overlapRatio,
   parsePace,
   parseTmapRoute,
   pathLengthM,
   pickThree,
   resample,
+  routeShape,
+  scoreCourse,
   targetDistanceM,
+  trimSpurs,
+  type ParsedRoute,
 } from './web/src/lib/course/lib';
 
 const daejeon: LatLng = { lat: 36.3504, lng: 127.3845 };
@@ -42,16 +49,22 @@ assert.deepEqual(calcElevationGain([0, 1, 2, 3, 4, 5]), { gain: 4, loss: 0 }); /
 assert.deepEqual(calcElevationGain([]), { gain: 0, loss: 0 });
 assert.ok(calcElevationGain([0, 1, 0, 1, 0, 1, 0], 0).gain > 0, '필터 끄면 노이즈가 잡혀야 함');
 
-// 4) 루프 경유지: 개수, 출발점에서 원의 지름(2r) 이내
+// 4) 루프 경유지: 개수, 폴리라인 길이 = 목표/k, 출발점에서 원의 지름(2r) 이내
 const targetM = 5000;
 const k = 1.3;
-const r = targetM / (2 * Math.PI * k);
-const wps = generateLoopWaypoints(daejeon, targetM, 0, 4, k);
-assert.equal(wps.length, 4);
-for (const w of wps) {
-  const d = haversineM(daejeon, w);
-  assert.ok(d > 100 && d <= 2 * r + 1, `경유지 거리 ${d.toFixed(0)}m (r=${r.toFixed(0)}m)`);
+for (const n of [2, 4]) {
+  const sides = n + 1;
+  const r = targetM / k / (2 * sides * Math.sin(Math.PI / sides));
+  const wps = generateLoopWaypoints(daejeon, targetM, 0, n, k);
+  assert.equal(wps.length, n);
+  near(pathLengthM([daejeon, ...wps, daejeon]), targetM / k, 15, `루프 폴리라인 길이(경유지 ${n})`);
+  for (const w of wps) {
+    const d = haversineM(daejeon, w);
+    assert.ok(d > 100 && d <= 2 * r + 1, `경유지 거리 ${d.toFixed(0)}m (r=${r.toFixed(0)}m)`);
+  }
 }
+assert.equal(generateLoopWaypoints(daejeon, targetM, 0).length, 2, '기본 경유지는 2개');
+const r = targetM / k / (2 * 5 * Math.sin(Math.PI / 5)); // 아래 5) 겹침 테스트용 반지름
 
 // 5) 겹침: 깨끗한 원은 거의 0, 왕복은 거의 1
 const center = destinationPoint(daejeon, 0, r);
@@ -62,8 +75,8 @@ const circleOverlap = overlapRatio(circleSamples);
 assert.ok(circleOverlap < 0.1, `원 겹침 ${circleOverlap}`);
 
 // 왕복은 출발·도착 구간과 되돌아가는 지점 근처가 제외되어 100%가 아니라 60% 안팎이 나온다
-const outAndBack = [...line, ...line.slice().reverse()];
-const oabOverlap = overlapRatio(resample(outAndBack, 50));
+const oabLine = [...line, ...line.slice().reverse()];
+const oabOverlap = overlapRatio(resample(oabLine, 50));
 assert.ok(oabOverlap > 0.5, `왕복 겹침 ${oabOverlap}`);
 assert.ok(oabOverlap > circleOverlap + 0.4, `왕복(${oabOverlap})과 원(${circleOverlap})이 구분되어야 함`);
 
@@ -166,18 +179,146 @@ const E = mk('E', 0, 0, 8000); // 거리 +60%: 후보에서 제외되어야 함
   const target = 5000;
   const left = generateOneWayWaypoints(s0, e0, target, 0, 1.3);
   const right = generateOneWayWaypoints(s0, e0, target, 240, 1.3);
-  assert.equal(left.length, 3);
+  assert.equal(left.length, 2);
   near(pathLengthM([s0, ...left, e0]), target / 1.3, 20, '편도 폴리라인 길이');
   near(pathLengthM([s0, ...right, e0]), target / 1.3, 20, '편도 폴리라인 길이(반대편)');
   // 동쪽으로 가는 축 기준, 왼쪽은 북쪽(+lat), 오른쪽은 남쪽(-lat)
-  assert.ok(left[1].lat > s0.lat && right[1].lat < s0.lat, '좌·우 경유지가 반대편에 있어야 함');
+  assert.ok(left[0].lat > s0.lat && right[0].lat < s0.lat, '좌·우 경유지가 반대편에 있어야 함');
   // 경유지 순서는 출발 쪽 → 도착 쪽
-  assert.ok(left[0].lng < left[1].lng && left[1].lng < left[2].lng, '경유지 순서');
+  assert.ok(left[0].lng < left[1].lng, '경유지 순서');
   assert.deepEqual(generateOneWayWaypoints(s0, e0, 1800, 0, 1.3), [], '목표가 직행과 비슷하면 직행');
   // 후보 방향 6개는 서로 다른 경유지 6세트여야 한다 (편도 후보가 전부 같은 코스로 나오던 문제)
   const sets = [0, 60, 120, 180, 240, 300].map((h) => generateOneWayWaypoints(s0, e0, target, h, 1.3));
   assert.equal(new Set(sets.map((w) => w.map((p) => `${p.lat.toFixed(4)},${p.lng.toFixed(4)}`).join('|'))).size, 6, '편도 경유지 6세트가 모두 달라야 함');
   for (const w of sets) near(pathLengthM([s0, ...w, e0]), target / 1.3, 20, '편도 변형별 길이');
+}
+
+// 9) 경로 모양: 직선은 꺾임 0·직진 100%, 왕복은 돌출, 사각형은 회전 4
+{
+  const straight = resample([daejeon, destinationPoint(daejeon, 90, 2000)], 20);
+  const sh = routeShape(straight);
+  assert.equal(sh.turnsPerKm, 0);
+  assert.ok(sh.straightRatio > 0.95 && sh.spurRatio === 0, `직선 ${JSON.stringify(sh)}`);
+
+  // 루프 중간에 300m 갔다 오는 돌출
+  const a = destinationPoint(daejeon, 90, 1000);
+  const spurTip = destinationPoint(a, 0, 300);
+  const withSpur = resample([daejeon, a, spurTip, a, destinationPoint(a, 90, 1000)], 20);
+  const sp = routeShape(withSpur);
+  near(sp.spurRatio, 600 / 2600, 0.05, '돌출 비율');
+  assert.ok(routeShape(circle).spurRatio === 0, '원형 루프는 돌출이 아니다');
+
+  // 한 변 500m 사각형 한 바퀴: 모서리 4개(출발점 제외 3개 + 닫힘)
+  const c1 = destinationPoint(daejeon, 90, 500);
+  const c2 = destinationPoint(c1, 0, 500);
+  const c3 = destinationPoint(daejeon, 0, 500);
+  const sq = routeShape(resample([daejeon, c1, c2, c3, daejeon], 20));
+  assert.ok(sq.turnsPerKm >= 1 && sq.turnsPerKm <= 2.5, `사각형 회전 ${sq.turnsPerKm}/km`);
+  assert.ok(sq.spurRatio === 0);
+
+  // pickThree: 돌출 큰 후보는 3개가 남는 한 제외된다
+  const spurry = { ...mk('S', 0, 0), spur: 0.3 };
+  const okA = { ...mk('a', 10, 3), spur: 0 }, okB = { ...mk('b', 12, 4), spur: 0.02 }, okC = { ...mk('c', 14, 5), spur: 0.05 };
+  const p1 = pickThree([spurry, okA, okB, okC], 5000).picks;
+  assert.ok(!p1.some((x) => x.item.id === 'S'), '돌출 후보 제외');
+  const p2 = pickThree([spurry, okA, okB], 5000).picks; // 깨끗한 후보가 3개 미만이면 돌출 후보도 쓴다
+  assert.equal(p2.length, 3);
+}
+
+// 10) 돌출 잘라내기: 경로는 이어지고 거리·횡단보도가 줄어든다
+{
+  const a = destinationPoint(daejeon, 90, 1000);
+  const tip = destinationPoint(a, 0, 300);
+  const end = destinationPoint(a, 90, 1000);
+  const path = resample([daejeon, a, tip, a, end], 20);
+  const mk2 = (kind: 'crossing' | 'stairs', at: LatLng) => ({ kind, at });
+  const route: ParsedRoute = {
+    path,
+    distanceM: 2700,
+    durationSec: 1000,
+    crossings: 2,
+    stairs: 0,
+    overpasses: 0,
+    marks: [mk2('crossing', tip), mk2('crossing', destinationPoint(a, 90, 500))],
+    calm: 0,
+    poor: 0,
+    turnTypeCounts: {},
+    facilityTypeCounts: {},
+  };
+  const t = trimSpurs(route);
+  near(pathLengthM(t.path), 2000, 40, '돌출 제거 후 길이');
+  assert.equal(t.crossings, 1, '돌출 끝의 횡단보도는 빠지고 본 경로의 것만 남는다');
+  assert.ok(t.distanceM < route.distanceM && t.distanceM > 1800, `거리 ${t.distanceM}`);
+  assert.ok(routeShape(t.path).spurRatio < 0.02, '자른 뒤에는 돌출이 없다');
+  for (let i = 1; i < t.path.length; i++) assert.ok(haversineM(t.path[i - 1], t.path[i]) < 60, '경로가 끊기지 않는다');
+  // 돌출이 없으면 그대로, 전체가 왕복이면 자르지 않는다
+  assert.equal(trimSpurs({ ...route, path: resample([daejeon, a], 20), marks: [] }).path.length, resample([daejeon, a], 20).length);
+  const oab = { ...route, path: resample([daejeon, a, daejeon], 20), marks: [] };
+  assert.equal(trimSpurs(oab), oab, '전체가 왕복이면 원본 유지');
+}
+
+// 11) 반환 코스: 편도 목적지는 목표의 절반 거리, 경로는 절반 지점에서 잘라 되돌아온다
+{
+  const tp = generateTurnaroundPoint(daejeon, 5000, 90);
+  near(haversineM(daejeon, tp), 2500, 1, '편도 목적지 거리');
+  near(bearingDeg(daejeon, tp), 90, 0.5, '편도 목적지 방향');
+
+  // 폴리라인 3000m, TMAP 거리 3300m(비율 1.1) 인 편도 → 목표 5000m 이면 폴리라인 약 2273m 지점에서 반환
+  const a = destinationPoint(daejeon, 90, 1500);
+  const b = destinationPoint(a, 0, 1500);
+  const path = resample([daejeon, a, b], 20);
+  const route: ParsedRoute = {
+    path,
+    distanceM: 3300,
+    durationSec: 2400,
+    crossings: 2,
+    stairs: 1,
+    overpasses: 0,
+    marks: [
+      { kind: 'crossing', at: destinationPoint(daejeon, 90, 700) },
+      { kind: 'stairs', at: destinationPoint(a, 0, 500) },
+      { kind: 'crossing', at: destinationPoint(a, 0, 1400) }, // 반환점 너머 → 빠진다
+    ],
+    calm: 0,
+    poor: 0,
+    turnTypeCounts: {},
+    facilityTypeCounts: {},
+  };
+  const o = outAndBack(route, 5000);
+  near(o.distanceM, 5000, 5, '반환 코스 거리');
+  near(o.durationSec, 2400 * (5000 / 3300), 5, '반환 코스 소요시간');
+  assert.equal(o.crossings, 2, '반환점 앞 횡단보도 1개 × 왕복');
+  assert.equal(o.stairs, 2, '반환점 앞 계단 1개 × 왕복');
+  assert.equal(haversineM(o.path[0], daejeon), 0, '출발점에서 시작');
+  assert.equal(haversineM(o.path[o.path.length - 1], daejeon), 0, '출발점으로 돌아온다');
+  const tip = o.path[(o.path.length - 1) / 2];
+  near(haversineM(a, tip), 2273 - 1500, 5, '반환점은 경로 위 절반 지점');
+  for (let i = 1; i < o.path.length; i++) assert.ok(haversineM(o.path[i - 1], o.path[i]) < 25, '경로가 끊기지 않는다');
+  // 편도가 목표 절반보다 짧으면 끝까지 갔다 온다
+  near(outAndBack(route, 10000).distanceM, 6600, 5, '짧은 편도는 끝까지 왕복');
+}
+
+// 12) roadType: 23(차량 통행 불가)·24(쾌적하지 않음) 구간 비율, 점수 반영
+{
+  const rl = (coords: [number, number][], roadType: number) => ({
+    type: 'Feature' as const,
+    geometry: { type: 'LineString' as const, coordinates: coords },
+    properties: { facilityType: '11', roadType },
+  });
+  const r = parseTmapRoute({
+    type: 'FeatureCollection',
+    features: [
+      rl([[127.38, 36.35], [127.381, 36.35]], 23), // 약 90m
+      rl([[127.381, 36.35], [127.382, 36.35]], 21), // 약 90m
+      rl([[127.382, 36.35], [127.383, 36.35]], 24), // 약 90m
+      rl([[127.383, 36.35], [127.384, 36.35]], 23), // 약 90m
+    ],
+  });
+  near(r.calm, 0.5, 0.01, 'calm 비율');
+  near(r.poor, 0.25, 0.01, 'poor 비율');
+  const base = { distanceM: 5000, targetM: 5000, gainM: 0, crossings: 0, stairs: 0, overlap: 0 };
+  assert.ok(scoreCourse({ ...base, calm: 0.8 }, 'BALANCED') < scoreCourse(base, 'BALANCED'), '보행자도로가 많으면 점수가 낮다(좋다)');
+  assert.ok(scoreCourse({ ...base, poor: 0.5 }, 'BALANCED') > scoreCourse(base, 'BALANCED'), '쾌적하지 않은 도로가 많으면 점수가 높다');
 }
 
 console.log('selftest 통과 ✔');

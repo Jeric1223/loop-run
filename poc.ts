@@ -46,9 +46,10 @@ import {
   scoreCourse,
   targetDistanceM,
 } from './web/src/lib/course/lib';
+import type { CacheStore } from './web/src/lib/course/cache';
+import { type CallCounter, fetchElevations as fetchTerrainElevations } from './web/src/lib/course/providers';
 
 const TMAP_URL = 'https://apis.openapi.sk.com/tmap/routes/pedestrian?version=1';
-const ELEVATION_URL = 'https://api.open-meteo.com/v1/elevation';
 const SAMPLE_STEP_M = 50;
 const CACHE_DIR = '.cache';
 const OUT_DIR = 'out';
@@ -60,7 +61,6 @@ const HEADING_OFFSET = Number(process.env.HEADING_OFFSET ?? 0);
 const POOL_SIZE = Math.min(8, Math.max(3, Number(process.env.POOL_SIZE ?? 6)));
 
 let tmapNetworkCalls = 0;
-let elevationNetworkCalls = 0;
 
 // ───────────────────────── 파일 캐시 ─────────────────────────
 
@@ -106,28 +106,10 @@ async function tmapPedestrian(start: LatLng, end: LatLng, waypoints: LatLng[]): 
   });
 }
 
-/** 좌표 배열을 100개씩 끊어 고도(m) 조회. Open-Meteo는 호출당 최대 100좌표. */
-async function fetchElevations(points: LatLng[]): Promise<number[]> {
-  const out: number[] = [];
-  for (let i = 0; i < points.length; i += 100) {
-    const chunk = points.slice(i, i + 100);
-    const lat = chunk.map((p) => p.lat.toFixed(5)).join(',');
-    const lng = chunk.map((p) => p.lng.toFixed(5)).join(',');
-    const url = `${ELEVATION_URL}?latitude=${lat}&longitude=${lng}`;
-
-    const data = await cached<{ elevation: number[] }>(`elev:${url}`, async () => {
-      elevationNetworkCalls++;
-      const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
-      if (!res.ok) throw new Error(`Open-Meteo ${res.status}: ${(await res.text()).slice(0, 200)}`);
-      return (await res.json()) as { elevation: number[] };
-    });
-    if (!Array.isArray(data.elevation) || data.elevation.length !== chunk.length) {
-      throw new Error('Open-Meteo 응답 형식이 예상과 다릅니다');
-    }
-    out.push(...data.elevation);
-  }
-  return out;
-}
+/** 고도(m) 조회: web 과 같은 AWS Terrain Tiles 구현을 쓴다 (타일은 프로세스 메모리 캐시, 파일 캐시 없음) */
+const elevationCounter: CallCounter = { tmap: 0, elevation: 0 };
+const noStore: CacheStore = { get: async () => undefined, set: async () => {} };
+const fetchElevations = (points: LatLng[]) => fetchTerrainElevations(noStore, elevationCounter, points);
 
 // ───────────────────────── 후보 생성 ─────────────────────────
 
@@ -395,7 +377,7 @@ async function main() {
     }),
   );
   console.log(`\n지도 확인: ${OUT_DIR}/result.geojson (보여준 3개, 초록·파랑·빨강 순) / ${OUT_DIR}/pool.geojson (전체, 회색)`);
-  console.log(`이번 실행 네트워크 호출: TMAP ${tmapNetworkCalls}회 (하루 1,000건 중), Open-Meteo ${elevationNetworkCalls}회 (캐시 적중분 제외)`);
+  console.log(`이번 실행 네트워크 호출: TMAP ${tmapNetworkCalls}회 (하루 1,000건 중), 지형 타일 ${elevationCounter.elevation}장 (메모리 캐시 적중분 제외)`);
 }
 
 function fail(msg: string): never {

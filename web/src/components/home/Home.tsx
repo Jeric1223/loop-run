@@ -130,7 +130,7 @@ export function Home({
         </div>
         {s.mode === "dist" ? <DistanceGoal s={s} dispatch={dispatch} /> : <PaceGoal s={s} dispatch={dispatch} />}
         <p className="source">
-          <b>출처</b> 고도 데이터 · <span className="ph">출처 문구가 들어갈 자리</span> · 지도 카카오맵
+          <b>출처</b> 고도 데이터 · AWS Terrain Tiles · 보행 경로 TMAP · 지도 카카오맵
         </p>
       </div>
       <div className="cta-bar">
