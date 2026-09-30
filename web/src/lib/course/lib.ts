@@ -345,6 +345,29 @@ export function overlapRatio(samples: LatLng[], minIndexGap = 6): number {
   return overlapped / n;
 }
 
+/**
+ * 샘플 구간별 경사율(%, 오르막 +). points[i]→points[i+1] 구간이 grade[i].
+ * DEM 해상도가 거칠어 고도가 들쭉날쭉하므로 고도와 경사율을 각각 3점 이동평균(경사율 끝은 2점 평균)으로 다듬고 ±15% 로 자른다.
+ * 지도에 색으로 칠하는 용도라 "대략 어디가 오르막인가"를 보는 정도의 정확도다.
+ */
+export function gradeProfile(points: LatLng[], elevations: number[]): number[] {
+  const n = Math.min(points.length, elevations.length);
+  if (n < 2) return [];
+  const smooth = (v: number[]) => v.map((x, i) => (i === 0 || i === v.length - 1 ? x : (v[i - 1] + x + v[i + 1]) / 3));
+  const z = smooth(elevations.slice(0, n));
+  const raw = Array.from({ length: n - 1 }, (_, i) => {
+    const d = haversineM(points[i], points[i + 1]);
+    return d === 0 ? 0 : ((z[i + 1] - z[i]) / d) * 100;
+  });
+  // 경사율의 양 끝은 이웃과 평균을 낸다 (끝점 고도는 이웃이 없어 잡음이 그대로 남기 때문)
+  const g = smooth(raw);
+  if (g.length > 1) {
+    g[0] = (raw[0] + raw[1]) / 2;
+    g[g.length - 1] = (raw[raw.length - 1] + raw[raw.length - 2]) / 2;
+  }
+  return g.map((x) => Math.max(-15, Math.min(15, x)));
+}
+
 // ───────────────────────── 경로 모양 (돌출·회전·직진) ─────────────────────────
 
 export type RouteShape = {

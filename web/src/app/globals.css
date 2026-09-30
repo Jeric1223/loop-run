@@ -211,6 +211,10 @@ svg{display:block}
 .fab:hover{background:var(--float-hover)}
 .fab svg{width:22px;height:22px}
 .map-chip{position:absolute;top:var(--sp-3);right:var(--sp-3);z-index:3;min-height:44px;display:flex;align-items:center;padding:0 var(--sp-4);border-radius:99px;background:var(--float);box-shadow:var(--shadow-float);font-size:var(--fs-sm);font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.slope-legend{position:absolute;top:calc(var(--sp-3) + 44px + var(--sp-2));right:var(--sp-3);z-index:3;width:136px;padding:var(--sp-2) var(--sp-3);border-radius:var(--r-md);background:var(--float);box-shadow:var(--shadow-float);pointer-events:none}
+.slope-bar{display:block;height:8px;border-radius:99px}
+.slope-lbl{display:flex;justify-content:space-between;margin-top:4px;font-size:var(--fs-cap);color:var(--muted)}
+.slope-lbl i{font-style:normal}
 .route{cursor:pointer}
 .route .line,.route .casing{fill:none;stroke-linejoin:round;transition:stroke-width .35s var(--ease-spring),opacity .3s}
 .route .casing{stroke:var(--map-casing);stroke-width:0;opacity:0}

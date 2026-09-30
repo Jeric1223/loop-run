@@ -7,6 +7,7 @@ import { fmtDur, fmtPace } from "@/lib/format";
 import type { CourseResult, Slope } from "@/lib/course/build";
 import { projectCourses } from "@/lib/course/project";
 import { KakaoCourseMap } from "./KakaoMap";
+import { SLOPE_GRADIENT } from "./slopeColor";
 import { RouteMap } from "./MapSvg";
 
 const GRADE: Record<Slope, { text: string; icon: "flat" | "gentle" | "hill" }> = {
@@ -127,6 +128,16 @@ export function Result({ courses, goal, onBack }: { courses: CourseResult[]; goa
           목표 바꾸기
         </button>
         <span className="map-chip">{chip}</span>
+        {!svgMap && courses[sel]?.profile && (
+          <div className="slope-legend" aria-label="경사 색 범례: 내리막은 파랑, 평지는 초록, 오르막은 노랑에서 빨강">
+            <span className="slope-bar" style={{ background: SLOPE_GRADIENT }} />
+            <span className="slope-lbl">
+              <i>내리막</i>
+              <i>평지</i>
+              <i>오르막</i>
+            </span>
+          </div>
+        )}
         {svgMap && <span className="map-tag">지도를 불러오지 못해 임시 지도로 보여줘요</span>}
       </div>
       <div className="sheet">

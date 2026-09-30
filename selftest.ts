@@ -11,6 +11,7 @@ import {
   generateLoopWaypoints,
   generateOneWayWaypoints,
   generateTurnaroundPoint,
+  gradeProfile,
   bearingDeg,
   haversineM,
   outAndBack,
@@ -26,6 +27,7 @@ import {
   trimSpurs,
   type ParsedRoute,
 } from './web/src/lib/course/lib';
+import { slopeColor } from './web/src/components/flow/slopeColor';
 
 const daejeon: LatLng = { lat: 36.3504, lng: 127.3845 };
 const near = (actual: number, expected: number, tol: number, label: string) =>
@@ -319,6 +321,22 @@ const E = mk('E', 0, 0, 8000); // 거리 +60%: 후보에서 제외되어야 함
   const base = { distanceM: 5000, targetM: 5000, gainM: 0, crossings: 0, stairs: 0, overlap: 0 };
   assert.ok(scoreCourse({ ...base, calm: 0.8 }, 'BALANCED') < scoreCourse(base, 'BALANCED'), '보행자도로가 많으면 점수가 낮다(좋다)');
   assert.ok(scoreCourse({ ...base, poor: 0.5 }, 'BALANCED') > scoreCourse(base, 'BALANCED'), '쾌적하지 않은 도로가 많으면 점수가 높다');
+}
+
+// 13) 경사율·색: 100m 마다 +5m 오르면 약 +5%, 내려가면 음수, 색은 끝점에서 고정되고 중간은 섞인다
+{
+  const pts = Array.from({ length: 6 }, (_, i) => destinationPoint(daejeon, 90, i * 100));
+  const up = gradeProfile(pts, [0, 5, 10, 15, 20, 25]);
+  assert.equal(up.length, 5);
+  up.forEach((g) => near(g, 5, 0.1, '오르막 경사율'));
+  gradeProfile(pts, [25, 20, 15, 10, 5, 0]).forEach((g) => near(g, -5, 0.1, '내리막 경사율'));
+  assert.ok(gradeProfile(pts, [0, 100, 0, 100, 0, 100]).every((g) => Math.abs(g) <= 15), '±15% 로 자른다');
+  assert.deepEqual(gradeProfile([daejeon], [1]), []);
+  assert.equal(slopeColor(-20), '#2563eb');
+  assert.equal(slopeColor(0), '#22c55e');
+  assert.equal(slopeColor(99), '#dc2626');
+  assert.notEqual(slopeColor(1.5), slopeColor(0));
+  assert.match(slopeColor(1.5), /^#[0-9a-f]{6}$/);
 }
 
 console.log('selftest 통과 ✔');

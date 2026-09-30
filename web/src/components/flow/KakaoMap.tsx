@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CourseResult } from "@/lib/course/build";
 import { loadKakao, type KMap, type KPolyline } from "@/lib/kakao";
+import { slopeColor } from "./slopeColor";
 
 type LL = { lat: number; lng: number };
 
@@ -20,6 +21,8 @@ function cssColor(varName: string): string {
   const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
   return `#${[r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
 }
+
+const SUBDIV = 4; // 구간 하나를 이만큼 쪼개 색을 이어 붙인다 (그라데이션처럼 보이게)
 
 const STYLES = ["solid", "shortdash", "dot"] as const; // ① 실선 ② 파선 ③ 점선
 
@@ -52,6 +55,8 @@ export function KakaoCourseMap({
   const casings = useRef<KPolyline[]>([]);
   const pins = useRef<HTMLElement[]>([]);
   const colors = useRef<string[]>([]);
+  const kakao = useRef<Awaited<ReturnType<typeof loadKakao>> | null>(null);
+  const mapRef = useRef<KMap | null>(null);
   const onSelectRef = useRef(onSelect);
   const onFailRef = useRef(onFail);
   const [ready, setReady] = useState(false);
@@ -69,6 +74,8 @@ export function KakaoCourseMap({
         if (dead || !box.current) return;
         const pt = (p: LL) => new k.maps.LatLng(p.lat, p.lng);
         const map: KMap = new k.maps.Map(box.current, { center: pt(start), level: 5 });
+        kakao.current = k;
+        mapRef.current = map;
         const bounds = new k.maps.LatLngBounds();
         bounds.extend(pt(start));
         if (end) bounds.extend(pt(end));
@@ -129,14 +136,34 @@ export function KakaoCourseMap({
   }, [ready]);
 
   // 선택 강조: 선택된 경로는 굵고 불투명하게, 핀은 키운다
+  // 경사 정보가 있으면 선택된 경로 위에 경사율 색을 이어 칠하고, 원래 선은 숨긴다
   useEffect(() => {
     if (!ready) return;
+    const profile = courses[sel]?.profile;
+    const k = kakao.current;
+    const map = mapRef.current;
+    const overlays: KPolyline[] = [];
+    if (profile && k && map && profile.pts.length > 1) {
+      const { pts, grade } = profile;
+      // 점마다 앞뒤 구간 경사율의 평균을 두고, 구간 안에서는 양 끝 값을 선형으로 섞는다
+      const at = (i: number) => (i === 0 ? grade[0] : i === grade.length ? grade[grade.length - 1] : (grade[i - 1] + grade[i]) / 2);
+      for (let i = 0; i < pts.length - 1; i++) {
+        for (let j = 0; j < SUBDIV; j++) {
+          const t0 = j / SUBDIV;
+          const t1 = (j + 1) / SUBDIV;
+          const lerp = (t: number) => new k.maps.LatLng(pts[i][0] + (pts[i + 1][0] - pts[i][0]) * t, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * t);
+          const g = at(i) + (at(i + 1) - at(i)) * ((t0 + t1) / 2);
+          overlays.push(new k.maps.Polyline({ map, path: [lerp(t0), lerp(t1)], strokeWeight: 8, strokeColor: slopeColor(g), strokeOpacity: 1, zIndex: 4 }));
+        }
+      }
+    }
     lines.current.forEach((l, i) =>
-      l.setOptions({ strokeWeight: i === sel ? 8 : 5, strokeOpacity: i === sel ? 1 : 0.55, zIndex: i === sel ? 3 : 1 }),
+      l.setOptions({ strokeWeight: i === sel ? 8 : 5, strokeOpacity: i === sel ? (overlays.length ? 0 : 1) : 0.55, zIndex: i === sel ? 3 : 1 }),
     );
     casings.current.forEach((c, i) => c.setOptions({ strokeWeight: i === sel ? 13 : 9, strokeOpacity: i === sel ? 0.95 : 0.7, zIndex: i === sel ? 2 : 0 }));
     pins.current.forEach((el, i) => el.setAttribute("data-sel", String(i === sel)));
-  }, [sel, ready]);
+    return () => overlays.forEach((o) => o.setMap(null));
+  }, [sel, ready, courses]);
 
   return <div ref={box} className="kmap" />;
 }

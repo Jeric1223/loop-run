@@ -5,6 +5,7 @@ import {
   type Role,
   ROLE_LABEL,
   calcElevationGain,
+  gradeProfile,
   generateLoopWaypoints,
   generateOneWayWaypoints,
   generateTurnaroundPoint,
@@ -45,10 +46,15 @@ type Candidate = {
   straight: number;
   calm: number;
   poor: number;
+  /** 구간별 경사율 (고도를 조회한 후보만) */
+  profile: SlopeProfile | null;
   /** 진단용: 이 후보를 만든 보정계수와 경유지 폴리라인 길이 */
   k: number;
   polyM: number;
 };
+
+/** 지도 경사 색칠용: pts[i]→pts[i+1] 구간의 경사율(%)이 grade[i] */
+export type SlopeProfile = { pts: [number, number][]; grade: number[] };
 
 export type Slope = "flat" | "gentle" | "hill";
 
@@ -59,6 +65,8 @@ export type CourseResult = {
   /** 고도 조회에 실패하면 null (경사 칩을 숨긴다) */
   gainM: number | null;
   slope: Slope | null;
+  /** 고도 조회에 실패하면 null (지도는 경사 색 없이 그린다) */
+  profile: SlopeProfile | null;
   crossings: number;
   stairs: number;
   /** 페이스가 있을 때만 (거리 × 페이스) */
@@ -147,6 +155,7 @@ function toCandidate(route: ParsedRoute, heading: number, turnaround: boolean, k
     straight: shape.straightRatio,
     calm: route.calm,
     poor: route.poor,
+    profile: null,
     k,
     polyM,
   };
@@ -200,9 +209,14 @@ export async function buildCourses(
     .sort((a, b) => preScore(a) - preScore(b))
     .slice(0, MAX_ELEVATION_CANDIDATES);
   const withGain = await Promise.allSettled(
-    finalists.map(async (c) => {
-      const elevations = await fetchElevations(store, counter, resample(c.route.path, ELEVATION_STEP_M));
-      return { ...c, gainM: calcElevationGain(elevations, 2).gain };
+    finalists.map(async (c): Promise<Candidate> => {
+      const pts = resample(c.route.path, ELEVATION_STEP_M);
+      const elevations = await fetchElevations(store, counter, pts);
+      const profile: SlopeProfile = {
+        pts: pts.map((p) => [Number(p.lat.toFixed(5)), Number(p.lng.toFixed(5))]),
+        grade: gradeProfile(pts, elevations).map((g) => Number(g.toFixed(1))),
+      };
+      return { ...c, gainM: calcElevationGain(elevations, 2).gain, profile };
     }),
   );
   let pool = withGain.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
@@ -221,6 +235,7 @@ export async function buildCourses(
     distanceM: Math.round(p.item.distanceM),
     gainM: noElevation ? null : Math.round(p.item.gainM),
     slope: noElevation ? null : slopeOf(p.item.gainM, p.item.distanceM),
+    profile: noElevation ? null : p.item.profile,
     crossings: p.item.crossings,
     stairs: p.item.stairs,
     estSec: input.paceSecPerKm === null ? null : Math.round((p.item.distanceM / 1000) * input.paceSecPerKm),
