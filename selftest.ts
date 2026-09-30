@@ -174,6 +174,10 @@ const E = mk('E', 0, 0, 8000); // 거리 +60%: 후보에서 제외되어야 함
   // 경유지 순서는 출발 쪽 → 도착 쪽
   assert.ok(left[0].lng < left[1].lng && left[1].lng < left[2].lng, '경유지 순서');
   assert.deepEqual(generateOneWayWaypoints(s0, e0, 1800, 0, 1.3), [], '목표가 직행과 비슷하면 직행');
+  // 후보 방향 6개는 서로 다른 경유지 6세트여야 한다 (편도 후보가 전부 같은 코스로 나오던 문제)
+  const sets = [0, 60, 120, 180, 240, 300].map((h) => generateOneWayWaypoints(s0, e0, target, h, 1.3));
+  assert.equal(new Set(sets.map((w) => w.map((p) => `${p.lat.toFixed(4)},${p.lng.toFixed(4)}`).join('|'))).size, 6, '편도 경유지 6세트가 모두 달라야 함');
+  for (const w of sets) near(pathLengthM([s0, ...w, e0]), target / 1.3, 20, '편도 변형별 길이');
 }
 
 console.log('selftest 통과 ✔');

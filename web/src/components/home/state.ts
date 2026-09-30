@@ -4,7 +4,7 @@ import { clamp } from "@/lib/format";
 
 export type GoalMode = "dist" | "pace";
 export type PickerKey = "pace" | "pp" | "min";
-export type Place = { kind: "gps" | "pin" | "search"; name: string };
+export type Place = { kind: "gps" | "pin" | "search"; name: string; lat?: number; lng?: number };
 
 export type HomeState = {
   mode: GoalMode;
@@ -21,8 +21,10 @@ export type HomeState = {
   start: Place;
   /** null 이면 출발점으로 돌아오는 왕복 */
   end: Place | null;
-  /** GPS 정확도 — 위치 연동 전까지는 항상 ok */
+  /** GPS 정확도 등급 */
   acc: "ok" | "low";
+  /** GPS 정확도 반경 (m). 측정 전이면 null */
+  accM: number | null;
 };
 
 export const KM_MIN = 0.5;
@@ -38,10 +40,11 @@ export const initialHomeState: HomeState = {
   pPace: 270,
   min: 30,
   pk: null,
-  // 위치 연동 전 샘플 (HANDOFF.md 교체 지점 4)
-  start: { kind: "gps", name: "성수동 인근" },
+  // 좌표가 없으면 아직 위치를 측정하지 않은 상태 (코스 만들기 때 측정)
+  start: { kind: "gps", name: "" },
   end: null,
   acc: "ok",
+  accM: null,
 };
 
 export type HomeAction =
@@ -57,7 +60,9 @@ export type HomeAction =
   | { type: "closePk" }
   | { type: "pickValue"; pk: PickerKey; value: number }
   | { type: "endClear" }
-  | { type: "refreshLocation" };
+  | { type: "setPlace"; target: "start" | "end"; place: Place }
+  | { type: "startName"; name: string }
+  | { type: "setLocation"; lat: number; lng: number; accuracy: number; low: boolean };
 
 const clampPace = (v: number) => clamp(v, PACE_MIN, PACE_MAX);
 
@@ -87,12 +92,24 @@ export function homeReducer(s: HomeState, a: HomeAction): HomeState {
       if (a.pk === "pace") return { ...s, pace: a.value, pk: null };
       if (a.pk === "pp") return { ...s, pPace: a.value, pk: null };
       return { ...s, min: a.value, pk: null };
+    case "setPlace":
+      return a.target === "start" ? { ...s, start: a.place, acc: "ok", accM: null } : { ...s, end: a.place };
+    case "startName":
+      return s.start.kind === "gps" ? { ...s, start: { ...s.start, name: a.name } } : s;
     case "endClear":
       return { ...s, end: null };
-    case "refreshLocation":
-      return { ...s, acc: "ok" };
+    case "setLocation":
+      return {
+        ...s,
+        start: { kind: "gps", name: `${a.lat.toFixed(4)}, ${a.lng.toFixed(4)}`, lat: a.lat, lng: a.lng },
+        acc: a.low ? "low" : "ok",
+        accM: Math.round(a.accuracy),
+      };
   }
 }
 
 /** 목표 거리 (m) */
 export const targetM = (s: HomeState) => (s.mode === "pace" ? ((s.min * 60) / s.pPace) * 1000 : s.km * 1000);
+
+/** 서버에 보낼 페이스 (초/km). 거리 모드에선 선택 입력, 페이스·시간 모드에선 항상 있음 */
+export const activePace = (s: HomeState) => (s.mode === "pace" ? s.pPace : s.pace);

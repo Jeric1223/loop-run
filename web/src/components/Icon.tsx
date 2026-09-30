@@ -40,6 +40,64 @@ const PATHS = {
   arrowR: <path d="M5 12h14M13 6l6 6-6 6" />,
   chevR: <path d="m9 5 7 7-7 7" />,
   chevD: <path d="m5 9 7 7 7-7" />,
+  chevL: <path d="m15 5-7 7 7 7" />,
+  flat: (
+    <>
+      <path d="M3 13h18" />
+      <path d="M3 18h18" opacity=".35" />
+    </>
+  ),
+  gentle: (
+    <>
+      <path d="M3 16.5 21 9.5" />
+      <path d="M3 20h18" opacity=".35" />
+    </>
+  ),
+  hill: <path d="M2.5 19.5 9 7l4 7 3-4 5.5 9.5Z" />,
+  cross: <path d="M4 5.5h16M4 9.5h16M4 13.5h16M4 17.5h16" strokeWidth={2.6} />,
+  stairs: <path d="M3 20h5v-5h5v-5h5V5h3" />,
+  pin: (
+    <>
+      <path d="M12 21.5s-7-6.2-7-11.5a7 7 0 0 1 14 0c0 5.3-7 11.5-7 11.5Z" />
+      <circle cx="12" cy="10" r="2.5" />
+    </>
+  ),
+  pinoff: (
+    <>
+      <path d="M12 21.5s-7-6.2-7-11.5a7 7 0 0 1 14 0c0 5.3-7 11.5-7 11.5Z" />
+      <circle cx="12" cy="10" r="2.5" />
+      <path d="M3 3l18 18" />
+    </>
+  ),
+  wifi: (
+    <>
+      <path className="wf" d="M2.5 8.8a15 15 0 0 1 19 0" />
+      <path className="wf" d="M5.5 12.6a10 10 0 0 1 13 0" />
+      <path className="wf" d="M8.6 16.2a5 5 0 0 1 6.8 0" />
+      <path d="M12 20v.1" />
+      <path d="M3 3l18 18" />
+    </>
+  ),
+  search: (
+    <>
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="m16 16 4.5 4.5" />
+    </>
+  ),
+  target: (
+    <>
+      <circle cx="12" cy="12" r="3" />
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3" />
+    </>
+  ),
+  locate: (
+    <>
+      <circle cx="12" cy="12" r="7" />
+      <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
+      <path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3" />
+    </>
+  ),
   sun: (
     <>
       <circle cx="12" cy="12" r="4" />

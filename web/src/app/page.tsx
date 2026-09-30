@@ -1,11 +1,5 @@
-import { Home } from "@/components/home/Home";
+import { Flow } from "@/components/flow/Flow";
 
 export default function Page() {
-  return (
-    <div className="stage">
-      <div className="phone">
-        <Home />
-      </div>
-    </div>
-  );
+  return <Flow />;
 }

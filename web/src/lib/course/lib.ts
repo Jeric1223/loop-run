@@ -91,11 +91,19 @@ export function bearingDeg(a: LatLng, b: LatLng): number {
   return (toDeg(Math.atan2(y, x)) + 360) % 360;
 }
 
+// 타원 호 위 경유지 각도(도). 작을수록 출발 쪽. [가운데, 출발 쪽으로 치우침, 도착 쪽으로 치우침]
+const ONE_WAY_THETAS = [
+  [45, 90, 135],
+  [25, 60, 100],
+  [80, 120, 155],
+];
+
 /**
  * 출발 ≠ 도착(편도)일 때 경유지를 만든다.
  * 출발·도착을 두 초점으로 하는 타원의 한쪽 호 위에 경유지를 놓고,
  * 출발 → 경유지들 → 도착 폴리라인 길이가 targetDistanceM / detourFactor 가 되도록 타원 크기를 이분 탐색한다.
- * headingDeg < 180 이면 진행 방향 왼쪽, 아니면 오른쪽으로 부풀린다 (후보 방향 다양화).
+ * 후보 다양화: headingDeg < 180 이면 진행 방향 왼쪽, 아니면 오른쪽으로 부풀리고,
+ * headingDeg % 180 에 따라 부푼 위치가 출발 쪽 / 가운데 / 도착 쪽으로 달라진다.
  * 목표가 직선거리 × detourFactor 이하면 우회할 여유가 없으므로 빈 배열(직행)을 돌려준다.
  */
 export function generateOneWayWaypoints(
@@ -111,7 +119,8 @@ export function generateOneWayWaypoints(
 
   const axis = bearingDeg(start, end);
   const side = headingDeg < 180 ? -1 : 1; // -1: 진행 방향 왼쪽(axis-90), 1: 오른쪽
-  const thetas = [45, 90, 135].map(toRad); // 출발 쪽 → 도착 쪽
+  const variant = Math.min(2, Math.floor((headingDeg % 180) / 60));
+  const thetas = ONE_WAY_THETAS[variant].map(toRad); // 출발 쪽 → 도착 쪽
   const c = direct / 2;
   const mid = destinationPoint(start, axis, c);
 

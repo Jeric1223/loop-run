@@ -52,7 +52,8 @@ export async function tmapPedestrian(
     });
     if (res.status === 429) throw new UpstreamError("tmap-quota", "TMAP 호출 한도를 넘었어요");
     if (!res.ok) throw new UpstreamError("tmap", `TMAP ${res.status}`);
-    return (await res.json()) as TmapResponse;
+    // 장소명 등에 JSON 에 넣을 수 없는 제어문자가 섞여 오는 경우가 있어 제거 후 파싱한다
+    return JSON.parse((await res.text()).replace(/[\u0000-\u001f]/g, " ")) as TmapResponse;
   });
 }
 
@@ -67,9 +68,13 @@ export async function fetchElevations(store: CacheStore, counter: CallCounter, p
 
     const data = await cached<{ elevation: number[] }>(store, `elev:${url}`, async () => {
       counter.elevation++;
-      const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
-      if (!res.ok) throw new UpstreamError("elevation", `Open-Meteo ${res.status}`);
-      return (await res.json()) as { elevation: number[] };
+      // 후보를 병렬로 만들 때 순간 호출이 몰려 가끔 실패하므로 한 번만 더 시도한다
+      for (let attempt = 0; ; attempt++) {
+        const res = await fetch(url, { signal: AbortSignal.timeout(10_000) }).catch(() => null);
+        if (res?.ok) return (await res.json()) as { elevation: number[] };
+        if (attempt === 1) throw new UpstreamError("elevation", `Open-Meteo ${res ? res.status : "network"}`);
+        await new Promise((r) => setTimeout(r, 600));
+      }
     });
     if (!Array.isArray(data.elevation) || data.elevation.length !== chunk.length) {
       throw new UpstreamError("elevation", "Open-Meteo 응답 형식이 예상과 다릅니다");

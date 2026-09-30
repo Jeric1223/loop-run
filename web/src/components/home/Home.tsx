@@ -1,17 +1,21 @@
 "use client";
 
-import { useReducer, useSyncExternalStore, type KeyboardEvent } from "react";
+import { useState, useSyncExternalStore, type Dispatch, type KeyboardEvent } from "react";
 import { Icon } from "@/components/Icon";
-import { MapPlaceholder } from "@/components/MapPlaceholder";
 import { Alert } from "./controls";
 import { DistanceGoal, PaceGoal } from "./GoalPanels";
+import { HomeMap } from "./HomeMap";
 import { PlaceCard } from "./PlaceCard";
-import { KM_MAX, KM_MIN, homeReducer, initialHomeState, targetM, type GoalMode } from "./state";
+import { PinPicker } from "./PinPicker";
+import { PlaceSheet, type SheetTarget } from "./PlaceSheet";
+import { KM_MAX, KM_MIN, targetM, type GoalMode, type Place, type HomeAction, type HomeState } from "./state";
 
 const MODES: { mode: GoalMode; label: string }[] = [
   { mode: "dist", label: "거리" },
   { mode: "pace", label: "페이스·시간" },
 ];
+
+const ll = (p: Place | null) => (p?.lat != null && p.lng != null ? { lat: p.lat, lng: p.lng } : null);
 
 const subscribeOnline = (cb: () => void) => {
   window.addEventListener("online", cb);
@@ -22,7 +26,7 @@ const subscribeOnline = (cb: () => void) => {
   };
 };
 
-function useOnline() {
+export function useOnline() {
   return useSyncExternalStore(
     subscribeOnline,
     () => navigator.onLine,
@@ -30,7 +34,7 @@ function useOnline() {
   );
 }
 
-function ThemeToggle() {
+export function ThemeToggle() {
   const toggle = () => {
     const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
     document.documentElement.dataset.theme = next;
@@ -49,10 +53,21 @@ function ThemeToggle() {
   );
 }
 
-/** 홈: 출발·도착 + 목표(거리 / 페이스·시간) → 코스 만들기 */
-export function Home() {
-  const [s, dispatch] = useReducer(homeReducer, initialHomeState);
+/** 홈: 출발·도착 + 목표(거리 / 페이스·시간) → 코스 만들기. 상태는 Flow 가 들고 있다 */
+export function Home({
+  s,
+  dispatch,
+  onRefresh,
+  onMake,
+}: {
+  s: HomeState;
+  dispatch: Dispatch<HomeAction>;
+  onRefresh: () => void;
+  onMake: () => void;
+}) {
   const online = useOnline();
+  const [sheet, setSheet] = useState<SheetTarget | null>(null);
+  const [picker, setPicker] = useState<SheetTarget | null>(null);
 
   const km = targetM(s) / 1000;
   const bad = s.mode === "pace" && (km < KM_MIN || km > KM_MAX);
@@ -86,7 +101,7 @@ export function Home() {
               tone="warn"
               title="위치 정확도가 낮아요"
               body="출발점이 실제 위치와 다를 수 있어요. 탁 트인 곳에서 다시 측정해 보세요."
-              action={{ label: "다시 측정", onClick: () => dispatch({ type: "refreshLocation" }) }}
+              action={{ label: "다시 측정", onClick: onRefresh }}
             />
           )}
         </div>
@@ -94,8 +109,10 @@ export function Home() {
           start={s.start}
           end={s.end}
           acc={s.acc}
-          onRefresh={() => dispatch({ type: "refreshLocation" })}
+          accM={s.accM}
+          onRefresh={onRefresh}
           onEndClear={() => dispatch({ type: "endClear" })}
+          onOpen={setSheet}
         />
         <div className="seg" role="tablist" aria-label="목표 방식" data-mode={s.mode}>
           <span className="thumb" />
@@ -117,13 +134,47 @@ export function Home() {
         </p>
       </div>
       <div className="cta-bar">
-        {/* 로딩·결과 화면은 다음 단계(HANDOFF 구현 순서 3~) */}
-        <button type="button" className="cta" disabled={bad}>
+        <button type="button" className="cta" disabled={bad} onClick={onMake}>
           코스 만들기
           <Icon name="arrowR" />
         </button>
       </div>
-      <MapPlaceholder className="dmap" />
+      <HomeMap start={ll(s.start)} end={ll(s.end)} />
+      {sheet && (
+        <PlaceSheet
+          target={sheet}
+          current={sheet === "start" ? s.start : s.end}
+          onLocate={() => {
+            setSheet(null);
+            onRefresh();
+          }}
+          onPick={(place) => {
+            dispatch({ type: "setPlace", target: sheet, place });
+            setSheet(null);
+          }}
+          onRoundTrip={() => {
+            dispatch({ type: "endClear" });
+            setSheet(null);
+          }}
+          onPin={() => {
+            setPicker(sheet);
+            setSheet(null);
+          }}
+          onClose={() => setSheet(null)}
+        />
+      )}
+      {picker && (
+        <PinPicker
+          target={picker}
+          origin={ll(picker === "start" ? s.start : s.end) ?? ll(s.start)}
+          other={ll(picker === "start" ? s.end : s.start)}
+          onPick={(place) => {
+            dispatch({ type: "setPlace", target: picker, place });
+            setPicker(null);
+          }}
+          onClose={() => setPicker(null)}
+        />
+      )}
     </section>
   );
 }
