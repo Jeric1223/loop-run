@@ -1,0 +1,7 @@
+.env
+.cache/
+out/
+node_modules/
+docs/
+.DS_Store
+.impeccable/

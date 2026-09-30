@@ -1,0 +1,38 @@
+/* 디자인 토큰 — docs/design/shared/base.css(스케일) + theme-toss.css(색·라운드) 이식
+   시안은 토스 스타일 하나로 확정이라 data-variant 대신 :root 에 둔다 */
+:root {
+  --font: Pretendard, "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+  /* 간격 4/8 */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
+  /* 타이포 스케일 (x1.25 근사) */
+  --fs-cap: 12px; --fs-sm: 14px; --fs-body: 16px; --fs-h3: 20px; --fs-h2: 24px; --fs-h1: 28px; --fs-num: 44px; --fs-display: 56px;
+  /* 토스 톤: 오버슈트 없이 감속만 하는 이징으로 절제 */
+  --ease-out: cubic-bezier(.22, 1, .36, 1);
+  --ease-spring: var(--ease-out);
+
+  --r-card: 20px; --r-cta: 18px; --r-seg: 14px; --r-chip: 14px; --r-md: 14px; --r-sm: 10px;
+
+  --stage: oklch(0.93 0.005 250); --bg: oklch(0.962 0.005 250); --surface: oklch(0.995 0.002 250); --surface-2: oklch(0.945 0.006 250); --surface-3: oklch(0.9 0.008 250);
+  --fg: oklch(0.22 0.02 255); --muted: oklch(0.47 0.02 255); --border: oklch(0.92 0.006 250);
+  --brand: oklch(0.55 0.2 258); --brand-hover: oklch(0.48 0.2 258); --on-brand: oklch(0.99 0 0); --brand-soft: oklch(0.94 0.04 255); --brand-soft-fg: oklch(0.45 0.18 258); --focus: oklch(0.55 0.2 258);
+  /* 코스 ①②③ — 빨강–초록 조합 금지, 색 외에 배지·선 패턴으로도 구분 */
+  --c1: oklch(0.5 0.19 258); --c2: oklch(0.74 0.17 60); --c3: oklch(0.55 0.21 340); --c1-on: oklch(0.99 0 0); --c2-on: oklch(0.2 0.02 255); --c3-on: oklch(0.99 0 0);
+  --ok: oklch(0.6 0.15 155); --ok-fg: oklch(0.4 0.12 155); --warn: oklch(0.78 0.16 75); --warn-fg: oklch(0.42 0.1 65); --danger: oklch(0.6 0.22 25); --danger-fg: oklch(0.46 0.19 25);
+  --seg-bg: oklch(0.92 0.006 250); --seg-thumb: oklch(0.995 0.002 250); --seg-thumb-sh: 0 2px 8px rgb(0 0 0 / .12);
+  --chip-on-bg: var(--brand-soft); --chip-on-fg: var(--brand-soft-fg); --chip-on-bd: var(--brand);
+  --map-bg: oklch(0.88 0.006 250); --map-road: oklch(0.94 0.005 250); --map-tag: oklch(0.94 0.005 250 / .9); --map-casing: oklch(1 0 0);
+  --float: oklch(1 0 0); --float-hover: oklch(0.96 0.005 250); --shadow-float: 0 4px 16px rgb(0 0 0 / .16); --shadow-sheet: 0 -8px 32px rgb(0 0 0 / .1); --shadow-card-sel: 0 8px 24px -8px color-mix(in oklch, var(--cc) 50%, transparent);
+  --sheet-bg: var(--bg); --skel: oklch(0.92 0.006 250); --skel-hi: oklch(0.98 0.004 250);
+}
+
+:root[data-theme="dark"] {
+  --stage: oklch(0.12 0.01 260); --bg: oklch(0.19 0.012 260); --surface: oklch(0.245 0.014 260); --surface-2: oklch(0.3 0.015 260); --surface-3: oklch(0.37 0.016 260);
+  --fg: oklch(0.96 0.005 250); --muted: oklch(0.74 0.015 255); --border: oklch(0.3 0.014 260);
+  --brand-hover: oklch(0.62 0.2 258); --brand-soft: oklch(0.3 0.08 258); --brand-soft-fg: oklch(0.84 0.1 250);
+  --c1: oklch(0.72 0.15 250); --c2: oklch(0.8 0.15 70); --c3: oklch(0.74 0.16 340); --c1-on: oklch(0.18 0.02 260); --c2-on: oklch(0.18 0.02 260); --c3-on: oklch(0.18 0.02 260);
+  --ok-fg: oklch(0.82 0.13 155); --warn-fg: oklch(0.86 0.13 80); --danger-fg: oklch(0.82 0.14 25);
+  --seg-bg: oklch(0.28 0.014 260); --seg-thumb: oklch(0.4 0.016 260); --seg-thumb-sh: 0 2px 8px rgb(0 0 0 / .4);
+  --map-bg: oklch(0.3 0.008 260); --map-road: oklch(0.36 0.008 260); --map-tag: oklch(0.24 0.01 260 / .9); --map-casing: oklch(0.19 0.012 260);
+  --float: oklch(0.3 0.015 260); --float-hover: oklch(0.36 0.016 260); --shadow-float: 0 4px 16px rgb(0 0 0 / .5); --shadow-sheet: 0 -8px 32px rgb(0 0 0 / .4);
+  --skel: oklch(0.3 0.015 260); --skel-hi: oklch(0.38 0.016 260);
+}
