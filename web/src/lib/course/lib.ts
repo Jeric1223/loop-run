@@ -59,17 +59,19 @@ export function pathLengthM(path: LatLng[]): number {
 
 /**
  * 출발점을 지나는 원 위에 경유지를 배치한다.
- * 반지름 r = D / (2π·k), k = 도로 굴곡 보정계수(직선 대비 실제 도로가 길어지는 비율).
- * 출발 → 경유지들 → 출발 순으로 TMAP에 요청하면 루프가 된다.
+ * 출발점과 경유지는 원에 내접하는 정다각형의 꼭짓점이다(경유지 2개면 정삼각형).
+ * 출발 → 경유지들 → 출발 폴리라인 길이가 D / k 가 되도록 반지름을 정한다 (k = 도로 굴곡 보정계수).
+ * 경유지가 적을수록 TMAP 이 경유지까지 들어갔다 나오는 돌출이 줄고 변이 길어져 직진 구간이 늘어난다.
  */
 export function generateLoopWaypoints(
   start: LatLng,
   targetDistanceM: number,
   headingDeg: number,
-  waypointCount = 4,
+  waypointCount = 2,
   detourFactor = 1.3,
 ): LatLng[] {
-  const radius = targetDistanceM / (2 * Math.PI * detourFactor);
+  const sides = waypointCount + 1;
+  const radius = targetDistanceM / detourFactor / (2 * sides * Math.sin(Math.PI / sides));
   const center = destinationPoint(start, headingDeg, radius);
   const startAngle = (headingDeg + 180) % 360; // 원의 중심에서 출발점을 바라본 방향
 
@@ -92,10 +94,11 @@ export function bearingDeg(a: LatLng, b: LatLng): number {
 }
 
 // 타원 호 위 경유지 각도(도). 작을수록 출발 쪽. [가운데, 출발 쪽으로 치우침, 도착 쪽으로 치우침]
+// 경유지는 2개만 둔다(돌출 기회를 줄이고 변을 길게)
 const ONE_WAY_THETAS = [
-  [45, 90, 135],
-  [25, 60, 100],
-  [80, 120, 155],
+  [60, 120],
+  [35, 90],
+  [90, 145],
 ];
 
 /**
@@ -150,6 +153,8 @@ export const CROSSING_TURN_TYPES = new Set([211, 212, 213, 214, 215, 216, 217]);
 export const STAIRS_TURN_TYPES = new Set([127, 129]); // 계단 진입, 계단+경사로 진입
 export const OVERPASS_TURN_TYPES = new Set([125, 126]); // 육교, 지하보도
 
+export type RouteMark = { kind: 'crossing' | 'stairs' | 'overpass'; at: LatLng };
+
 export type ParsedRoute = {
   path: LatLng[];
   distanceM: number;
@@ -157,6 +162,8 @@ export type ParsedRoute = {
   crossings: number;
   stairs: number;
   overpasses: number;
+  /** 횡단보도·계단·육교 위치. 돌출 구간을 잘라낼 때 해당 구간의 개수를 빼기 위해 들고 있는다 */
+  marks: RouteMark[];
   /** 디버그용: 응답에 실제로 나온 turnType / facilityType 분포 */
   turnTypeCounts: Record<string, number>;
   facilityTypeCounts: Record<string, number>;
@@ -175,6 +182,7 @@ export function parseTmapRoute(res: TmapResponse): ParsedRoute {
   let crossings = 0;
   let stairs = 0;
   let overpasses = 0;
+  const marks: RouteMark[] = [];
 
   for (const f of res.features) {
     const p = f.properties;
@@ -184,9 +192,14 @@ export function parseTmapRoute(res: TmapResponse): ParsedRoute {
       const t = Number(p.turnType);
       if (Number.isFinite(t)) {
         bump(turnTypeCounts, String(t));
-        if (CROSSING_TURN_TYPES.has(t)) crossings++;
-        else if (STAIRS_TURN_TYPES.has(t)) stairs++;
-        else if (OVERPASS_TURN_TYPES.has(t)) overpasses++;
+        const kind = CROSSING_TURN_TYPES.has(t) ? 'crossing' : STAIRS_TURN_TYPES.has(t) ? 'stairs' : OVERPASS_TURN_TYPES.has(t) ? 'overpass' : null;
+        if (kind) {
+          if (kind === 'crossing') crossings++;
+          else if (kind === 'stairs') stairs++;
+          else overpasses++;
+          const [lng, lat] = f.geometry.coordinates;
+          marks.push({ kind, at: { lat, lng } });
+        }
       }
     } else {
       if (p.facilityType !== undefined) bump(facilityTypeCounts, String(p.facilityType));
@@ -204,6 +217,7 @@ export function parseTmapRoute(res: TmapResponse): ParsedRoute {
     crossings,
     stairs,
     overpasses,
+    marks,
     turnTypeCounts,
     facilityTypeCounts,
   };
@@ -307,34 +321,168 @@ export function overlapRatio(samples: LatLng[], minIndexGap = 6): number {
   return overlapped / n;
 }
 
+// ───────────────────────── 경로 모양 (돌출·회전·직진) ─────────────────────────
+
+export type RouteShape = {
+  /** 갔던 길을 그대로 되돌아오는(왕복 돌출) 구간이 전체 길이에서 차지하는 비율 0~1 */
+  spurRatio: number;
+  /** 45° 이상 꺾이는 횟수 / km */
+  turnsPerKm: number;
+  /** 400m 이상 꺾임 없이 이어지는 구간이 전체에서 차지하는 비율 0~1 */
+  straightRatio: number;
+};
+
+const SPUR_MIN_M = 60; // 이보다 짧은 왕복은 돌출로 세지 않는다
+const TURN_DEG = 45;
+const STRAIGHT_RUN_M = 400;
+
+/**
+ * 왕복 돌출 구간 목록. 점 i 와 j 가 20m 안에서 만나고 그 사이가 i+k ↔ j-k 로 거울처럼 겹치면 "갔다 온" 구간이다
+ * (루프는 거울이 아니라서 제외). 구간 길이가 SPUR_MIN_M 미만이면 세지 않는다.
+ */
+export function findSpurs(path: LatLng[]): { i: number; j: number; lengthM: number }[] {
+  const spurs: { i: number; j: number; lengthM: number }[] = [];
+  for (let i = 0; i < path.length - 3; ) {
+    let bestJ = -1;
+    let bestLen = 0;
+    for (let j = i + 3; j < path.length; j++) {
+      if (haversineM(path[i], path[j]) > 20) continue;
+      const m = Math.floor((j - i) / 2);
+      if (m < 2) continue;
+      let ok = 0;
+      for (let k = 1; k < m; k++) if (haversineM(path[i + k], path[j - k]) < 25) ok++;
+      if (ok < 0.8 * (m - 1)) continue;
+      const len = pathLengthM(path.slice(i, j + 1));
+      if (len >= SPUR_MIN_M) {
+        bestJ = j;
+        bestLen = len;
+      }
+    }
+    if (bestJ < 0) i++;
+    else {
+      spurs.push({ i, j: bestJ, lengthM: bestLen });
+      i = bestJ;
+    }
+  }
+  return spurs;
+}
+
+/**
+ * 왕복 돌출을 잘라낸 경로를 돌려준다. 돌출은 경유지를 찍고 나오는 부산물이라 러너에게 가치가 없고,
+ * 잘라도 경로는 끊기지 않는다(출발점 쪽 i 에서 바로 j 이후로 이어진다).
+ * 거리·시간은 폴리라인 길이 비율로 줄이고, 잘린 구간의 횡단보도·계단·육교는 개수에서 뺀다.
+ * 절반 넘게 잘려 나가면(전체가 왕복인 코스) 원본을 그대로 돌려준다.
+ */
+export function trimSpurs(route: ParsedRoute): ParsedRoute {
+  const spurs = findSpurs(route.path);
+  if (spurs.length === 0) return route;
+  const drop = route.path.map(() => false);
+  for (const s of spurs) for (let t = s.i + 1; t <= s.j; t++) drop[t] = true;
+  const path = route.path.filter((_, t) => !drop[t]);
+  const before = pathLengthM(route.path);
+  const after = pathLengthM(path);
+  if (after < before * 0.5) return route;
+
+  const marks = route.marks.filter((m) => {
+    let best = 0;
+    let bestD = Number.POSITIVE_INFINITY;
+    route.path.forEach((p, t) => {
+      const d = haversineM(p, m.at);
+      if (d < bestD) {
+        bestD = d;
+        best = t;
+      }
+    });
+    return !drop[best];
+  });
+  const count = (kind: RouteMark['kind']) => marks.filter((m) => m.kind === kind).length;
+  const ratio = after / before;
+  return {
+    ...route,
+    path,
+    distanceM: route.distanceM * ratio,
+    durationSec: route.durationSec * ratio,
+    crossings: count('crossing'),
+    stairs: count('stairs'),
+    overpasses: count('overpass'),
+    marks,
+  };
+}
+
+/** 러너 관점의 경로 모양 지표. 원본 경로(TMAP 좌표)를 받는다 */
+export function routeShape(path: LatLng[]): RouteShape {
+  const total = pathLengthM(path);
+  if (path.length < 4 || total === 0) return { spurRatio: 0, turnsPerKm: 0, straightRatio: 1 };
+
+  const spurM = findSpurs(path).reduce((sum, s) => sum + s.lengthM, 0);
+
+  // 30m 이상 벌어진 점만 남겨 지그재그 노이즈를 지우고 회전을 센다
+  const q = [path[0]];
+  for (const p of path.slice(1)) if (haversineM(q[q.length - 1], p) >= 30) q.push(p);
+  let turns = 0;
+  let straightM = 0;
+  let run = 0;
+  for (let i = 1; i < q.length - 1; i++) {
+    run += haversineM(q[i - 1], q[i]);
+    const d = Math.abs(((bearingDeg(q[i], q[i + 1]) - bearingDeg(q[i - 1], q[i]) + 540) % 360) - 180);
+    if (d >= TURN_DEG) {
+      turns++;
+      if (run >= STRAIGHT_RUN_M) straightM += run;
+      run = 0;
+    }
+  }
+  run += q.length > 1 ? haversineM(q[q.length - 2], q[q.length - 1]) : 0;
+  if (run >= STRAIGHT_RUN_M) straightM += run;
+
+  return {
+    spurRatio: Math.min(1, spurM / total),
+    turnsPerKm: turns / (total / 1000),
+    straightRatio: Math.min(1, straightM / total),
+  };
+}
+
 // ───────────────────────── 점수 ─────────────────────────
 
 export type Preset = 'BALANCED' | 'FLAT' | 'HILL' | 'FEW_CROSSINGS';
-type Weights = { deviation: number; gain: number; crossings: number; stairs: number; overlap: number };
+type Weights = { deviation: number; gain: number; crossings: number; stairs: number; overlap: number; spur: number; turns: number; straight: number };
 
-/** 초기값(임시). 실제 코스로 돌려보며 튜닝한다. */
+/** 초기값(임시). 실제 코스로 돌려보며 튜닝한다. gain·crossings·stairs 는 km당 값에 곱한다 */
 export const PRESET_WEIGHTS: Record<Preset, Weights> = {
-  // 종합 추천용(pick 모드의 ①): 경사·횡단보도·계단·겹침을 골고루 본다
-  BALANCED: { deviation: 10, gain: 0.06, crossings: 0.5, stairs: 1.5, overlap: 3 },
+  // 종합 추천용(pick 모드의 ①): 경사·횡단보도·계단·겹침에 더해 돌출·회전·직진성을 본다
+  BALANCED: { deviation: 10, gain: 0.3, crossings: 2.5, stairs: 7.5, overlap: 3, spur: 20, turns: 0.2, straight: 3 },
   // rank 모드에서 고르는 프리셋
-  FLAT: { deviation: 10, gain: 0.1, crossings: 0.3, stairs: 1.5, overlap: 3 }, // 평지 선호
-  HILL: { deviation: 10, gain: -0.05, crossings: 0.3, stairs: 1.5, overlap: 3 }, // 언덕 훈련: 오르막이 많을수록 가점
-  FEW_CROSSINGS: { deviation: 10, gain: 0.03, crossings: 1.0, stairs: 1.5, overlap: 3 }, // 신호 적게
+  FLAT: { deviation: 10, gain: 0.5, crossings: 1.5, stairs: 7.5, overlap: 3, spur: 20, turns: 0.2, straight: 3 }, // 평지 선호
+  HILL: { deviation: 10, gain: -0.25, crossings: 1.5, stairs: 7.5, overlap: 3, spur: 20, turns: 0.2, straight: 3 }, // 언덕 훈련: 오르막이 많을수록 가점
+  FEW_CROSSINGS: { deviation: 10, gain: 0.15, crossings: 5, stairs: 7.5, overlap: 3, spur: 20, turns: 0.2, straight: 3 }, // 신호 적게
 };
 
-/** 낮을수록 좋은 코스 */
+/** 낮을수록 좋은 코스. 모양 지표(spur·turnsPerKm·straight)는 없으면 건너뛴다 */
 export function scoreCourse(
-  m: { distanceM: number; targetM: number; gainM: number; crossings: number; stairs: number; overlap: number },
+  m: {
+    distanceM: number;
+    targetM: number;
+    gainM: number;
+    crossings: number;
+    stairs: number;
+    overlap: number;
+    spur?: number;
+    turnsPerKm?: number;
+    straight?: number;
+  },
   preset: Preset,
 ): number {
   const w = PRESET_WEIGHTS[preset];
+  const km = m.distanceM / 1000;
   const deviation = Math.abs(m.distanceM - m.targetM) / m.targetM;
   return (
     w.deviation * deviation +
-    w.gain * m.gainM +
-    w.crossings * m.crossings +
-    w.stairs * m.stairs +
-    w.overlap * m.overlap
+    (w.gain * m.gainM) / km +
+    (w.crossings * m.crossings) / km +
+    (w.stairs * m.stairs) / km +
+    w.overlap * m.overlap +
+    w.spur * (m.spur ?? 0) +
+    w.turns * (m.turnsPerKm ?? 0) +
+    (m.straight === undefined ? 0 : w.straight * (1 - m.straight))
   );
 }
 
@@ -381,7 +529,19 @@ export const ROLE_LABEL: Record<Role, string> = {
   MIN_CROSSINGS: '횡단보도 최소',
 };
 
-export type Rankable = { distanceM: number; gainM: number; crossings: number; stairs: number; overlap: number };
+export type Rankable = {
+  distanceM: number;
+  gainM: number;
+  crossings: number;
+  stairs: number;
+  overlap: number;
+  spur?: number;
+  turnsPerKm?: number;
+  straight?: number;
+};
+
+/** 왕복 돌출이 이 비율을 넘는 후보는 (3개가 남는 한) 뽑지 않는다. 임시값 */
+export const SPUR_MAX = 0.1;
 export type Pick<T> = { role: Role; item: T; score: number; note: string | null };
 
 /**
@@ -391,6 +551,7 @@ export type Pick<T> = { role: Role; item: T; score: number; note: string | null 
  *   ③ 횡단보도 최소 : 횡단보도 수가 가장 적은 코스
  * 같은 코스가 여러 기준의 1위면 앞선 슬롯이 가져가고, 다음 슬롯은 차순위를 고른다.
  * 목표 거리 ±tolerance 안의 후보만 대상으로 하고, 부족하면 ±20% → 전체 순으로 넓힌다.
+ * 그 안에서 왕복 돌출이 SPUR_MAX 이하인 후보가 3개 이상이면 돌출이 큰 후보는 뺀다.
  */
 export function pickThree<T extends Rankable>(
   items: T[],
@@ -408,15 +569,25 @@ export function pickThree<T extends Rankable>(
     }
   }
 
-  const scored = items
-    .filter((it) => dev(it) <= used)
-    .map((item) => ({
-      item,
-      score: scoreCourse(
-        { distanceM: item.distanceM, targetM, gainM: item.gainM, crossings: item.crossings, stairs: item.stairs, overlap: item.overlap },
-        'BALANCED',
-      ),
-    }));
+  const inRange = items.filter((it) => dev(it) <= used);
+  const clean = inRange.filter((it) => (it.spur ?? 0) <= SPUR_MAX);
+  const scored = (clean.length >= want ? clean : inRange).map((item) => ({
+    item,
+    score: scoreCourse(
+      {
+        distanceM: item.distanceM,
+        targetM,
+        gainM: item.gainM,
+        crossings: item.crossings,
+        stairs: item.stairs,
+        overlap: item.overlap,
+        spur: item.spur,
+        turnsPerKm: item.turnsPerKm,
+        straight: item.straight,
+      },
+      'BALANCED',
+    ),
+  }));
 
   type Scored = (typeof scored)[number];
   const order: Record<Role, (a: Scored, b: Scored) => number> = {

@@ -58,7 +58,7 @@ export async function POST(request: Request) {
 
   try {
     const out = await buildCourses(store, { start, end, targetM, paceSecPerKm: pace ?? null });
-    return Response.json(out);
+    return Response.json({ courses: out.courses, usedTolerance: out.usedTolerance, calls: out.calls }); // pool 은 진단용이라 싣지 않는다
   } catch (e) {
     if (e instanceof UpstreamError) {
       const status = e.kind === "tmap-quota" ? 429 : e.kind === "config" ? 500 : 502;
