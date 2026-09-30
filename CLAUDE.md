@@ -27,7 +27,7 @@ selftest는 단일 스크립트(`node:assert/strict`)라 개별 테스트 실행
 ## 아키텍처
 
 - [lib.ts](lib.ts) — **순수 로직, 네트워크·fs 없음.** 루프 경유지 생성(`generateLoopWaypoints`), TMAP 응답 해석(`parseTmapRoute`, `turnType` 집합으로 횡단보도/계단/육교 카운트), 50m 재샘플링, 상승고도(`calcElevationGain`, 2m 임계값), 겹침(`overlapRatio`, 30m 격자), 점수(`scoreCourse` + `PRESET_WEIGHTS`), 3개 선택(`pickThree`). Route Handler로 그대로 이식할 코드이므로 I/O를 넣지 않는다.
-- [poc.ts](poc.ts) — I/O 담당. TMAP 보행자 API·Open-Meteo 고도 API 호출, `.cache/`에 요청 키 sha256 기반 파일 캐시, 콘솔 리포트, `out/*.geojson`·`out/elevation-*.csv` 출력. 고도 조회(`fetchElevations`)는 이후 `ElevationProvider` 인터페이스로 분리 예정.
+- [poc.ts](poc.ts) — I/O 담당. TMAP 보행자 API 호출, 고도는 web 의 `providers.ts`(AWS Terrain Tiles)를 재사용, `.cache/`에 요청 키 sha256 기반 파일 캐시, 콘솔 리포트, `out/*.geojson`·`out/elevation-*.csv` 출력.
 - [selftest.ts](selftest.ts) — 가짜 TMAP 응답과 합성 데이터로 `lib.ts`만 검증.
 
 흐름: 목표 거리 D → 반지름 `D/(2π·k)`(k=1.3) 원 위에 경유지 4개 → TMAP `출발→경유지4→출발` → 거리가 ±10% 밖이면 `k` 보정해 **1회만** 재시도 → 파싱 → 재샘플링 → 고도 → 겹침 → 점수 → rank(3방향 줄세우기) 또는 pick(풀에서 역할별 3개).

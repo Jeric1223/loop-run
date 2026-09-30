@@ -25,7 +25,7 @@ export type ResultGoal = {
 };
 
 function Card({ c, i, sel, targetM, onSelect }: { c: CourseResult; i: number; sel: boolean; targetM: number; onSelect: () => void }) {
-  const grade = GRADE[c.slope];
+  const grade = c.slope ? GRADE[c.slope] : null; // 고도 조회 실패 시 경사 칩을 숨긴다
   const pct = Math.round(((c.distanceM - targetM) / targetM) * 100);
   const far = Math.abs(pct) >= 10;
   const onKey = (e: KeyboardEvent) => {
@@ -79,10 +79,12 @@ function Card({ c, i, sel, targetM, onSelect }: { c: CourseResult; i: number; se
         )}
       </div>
       <div className="chips">
-        <span className="chip" aria-label={`경사 ${grade.text}`}>
-          <Icon name={grade.icon} />
-          {grade.text}
-        </span>
+        {grade && (
+          <span className="chip" aria-label={`경사 ${grade.text}`}>
+            <Icon name={grade.icon} />
+            {grade.text}
+          </span>
+        )}
         <span className="chip">
           <Icon name="cross" />
           횡단보도 <b>{c.crossings}</b>개

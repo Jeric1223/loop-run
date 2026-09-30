@@ -7,6 +7,8 @@ import {
   calcElevationGain,
   generateLoopWaypoints,
   generateOneWayWaypoints,
+  generateTurnaroundPoint,
+  outAndBack,
   overlapRatio,
   parseTmapRoute,
   pathLengthM,
@@ -18,16 +20,21 @@ import {
 } from "./lib";
 import { type CallCounter, UpstreamError, fetchElevations, tmapPedestrian } from "./providers";
 
-const SAMPLE_STEP_M = 50;
+const SAMPLE_STEP_M = 50; // 겹침 계산용
+// 고도 조회용 간격. DEM 해상도(90m)보다 촘촘하게 찍어도 정보가 늘지 않고 Open-Meteo 한도만 쓴다
+const ELEVATION_STEP_M = 100;
 const DEFAULT_POOL_SIZE = 6;
-// 고도 조회 대상 후보 수 상한. Open-Meteo 분당 한도(429) 때문에 후보 전부를 조회하면 일부가 탈락한다
-const MAX_ELEVATION_CANDIDATES = 6;
+// 고도 조회 대상 후보 수 상한. Open-Meteo 는 분·시간 단위 한도(429)가 있어 조회량을 줄인다
+const MAX_ELEVATION_CANDIDATES = 4;
+const TURNAROUND_COUNT = 2; // 루프 모드 후보 중 반환 코스 수
 const LOOP_WAYPOINTS = 2; // 경유지가 적을수록 돌출(경유지까지 갔다 오는 구간)이 줄고 직진 구간이 길어진다
 
 type Candidate = {
   heading: number;
   route: ParsedRoute;
   samples: LatLng[];
+  /** 같은 길로 돌아오는 반환 코스 (의도된 왕복이라 돌출·겹침으로 감점하지 않는다) */
+  turnaround: boolean;
   distanceM: number;
   gainM: number;
   crossings: number;
@@ -36,6 +43,8 @@ type Candidate = {
   spur: number;
   turnsPerKm: number;
   straight: number;
+  calm: number;
+  poor: number;
   /** 진단용: 이 후보를 만든 보정계수와 경유지 폴리라인 길이 */
   k: number;
   polyM: number;
@@ -47,8 +56,9 @@ export type CourseResult = {
   role: Role;
   label: string;
   distanceM: number;
-  gainM: number;
-  slope: Slope;
+  /** 고도 조회에 실패하면 null (경사 칩을 숨긴다) */
+  gainM: number | null;
+  slope: Slope | null;
   crossings: number;
   stairs: number;
   /** 페이스가 있을 때만 (거리 × 페이스) */
@@ -83,9 +93,19 @@ async function buildCandidate(
   counter: CallCounter,
   input: BuildInput,
   heading: number,
+  kind: "loop" | "turnaround",
 ): Promise<Candidate[]> {
   const { start, targetM } = input;
   const end = input.end ?? start;
+  const turnaround = kind === "turnaround";
+
+  // 반환 코스: 편도 1회 호출 → 목표 절반 지점에서 잘라 되돌아온다. 거리가 목표와 거의 같아 재시도가 없다
+  if (turnaround) {
+    const far = generateTurnaroundPoint(start, targetM, heading);
+    const oneWay = trimSpurs(parseTmapRoute(await tmapPedestrian(store, counter, start, far, [])));
+    if (oneWay.path.length < 2) throw new UpstreamError("tmap", "TMAP 응답에 경로 좌표가 없습니다");
+    return [toCandidate(outAndBack(oneWay, targetM), heading, true, 0, pathLengthM([start, far]))];
+  }
 
   // TMAP 거리는 경유지 길이에 비례하지 않고 들쭉날쭉해서(실측 README 참고) 한 번의 선형 보정으로는 수렴하지 않는다.
   // 그래서 ① 보정은 제곱근으로 완화하고 ② 재시도까지 얻은 경로를 모두 후보로 남겨 pickThree 가 고르게 한다 (최대 2회 호출)
@@ -104,30 +124,42 @@ async function buildCandidate(
     k *= Math.sqrt(parsed.distanceM / targetM);
   }
 
-  // 고도(gainM)는 여기서 조회하지 않는다 — 뽑힐 후보가 정해진 뒤 buildCourses 가 채운다
-  return routes.map(({ route, k, polyM }) => {
-    const samples = resample(route.path, SAMPLE_STEP_M);
-    const shape = routeShape(route.path);
-    return {
-      heading,
-      route,
-      samples,
-      distanceM: route.distanceM,
-      gainM: 0,
-      crossings: route.crossings,
-      stairs: route.stairs,
-      overlap: overlapRatio(samples),
-      spur: shape.spurRatio,
-      turnsPerKm: shape.turnsPerKm,
-      straight: shape.straightRatio,
-      k,
-      polyM,
-    };
-  });
+  return routes.map(({ route, k, polyM }) => toCandidate(route, heading, false, k, polyM));
+}
+
+// 고도(gainM)는 여기서 조회하지 않는다 — 뽑힐 후보가 정해진 뒤 buildCourses 가 채운다
+function toCandidate(route: ParsedRoute, heading: number, turnaround: boolean, k: number, polyM: number): Candidate {
+  const samples = resample(route.path, SAMPLE_STEP_M);
+  const shape = routeShape(route.path);
+  return {
+    heading,
+    route,
+    samples,
+    turnaround,
+    distanceM: route.distanceM,
+    gainM: 0,
+    crossings: route.crossings,
+    stairs: route.stairs,
+    // 반환 코스의 왕복은 의도된 것이라 겹침·돌출로 감점하지 않는다
+    overlap: turnaround ? 0 : overlapRatio(samples),
+    spur: turnaround ? 0 : shape.spurRatio,
+    turnsPerKm: shape.turnsPerKm,
+    straight: shape.straightRatio,
+    calm: route.calm,
+    poor: route.poor,
+    k,
+    polyM,
+  };
+}
+
+function noteOf(role: Role, turnaround: boolean, note: string | null, noElevation: boolean): string | null {
+  if (noElevation && role === "MIN_GAIN") return "고도 정보를 불러오지 못해 경사는 비교하지 못했어요";
+  if (turnaround) return "같은 길로 돌아오는 반환 코스예요";
+  return note;
 }
 
 /** 진단용 후보 풀 요약 (API 응답에는 싣지 않는다) */
-export type PoolEntry = Pick<Candidate, "heading" | "distanceM" | "spur" | "turnsPerKm" | "straight" | "crossings" | "gainM" | "k" | "polyM">;
+export type PoolEntry = Pick<Candidate, "heading" | "distanceM" | "spur" | "turnsPerKm" | "straight" | "crossings" | "gainM" | "k" | "polyM" | "turnaround">;
 
 export type BuildOutput = { courses: CourseResult[]; usedTolerance: number; calls: CallCounter; pool: PoolEntry[] };
 
@@ -138,9 +170,16 @@ export async function buildCourses(
   poolSize = DEFAULT_POOL_SIZE,
 ): Promise<BuildOutput> {
   const counter: CallCounter = { tmap: 0, elevation: 0 };
-  const headings = Array.from({ length: poolSize }, (_, i) => (i * 360) / poolSize);
+  // 루프 모드: 일부 방향은 "같은 길로 돌아오는 반환 코스"로 만든다. 일자로 쭉 뛰는 코스를 후보에 섞기 위함
+  const turnarounds = !input.end && poolSize >= 4 ? TURNAROUND_COUNT : 0;
+  const loops = poolSize - turnarounds;
+  const plans: { heading: number; kind: "loop" | "turnaround" }[] = [
+    ...Array.from({ length: loops }, (_, i) => ({ heading: (i * 360) / loops, kind: "loop" as const })),
+    // 루프 방향 사이사이에 놓아 서로 다른 길이 되게 한다
+    ...Array.from({ length: turnarounds }, (_, i) => ({ heading: 360 / loops / 2 + (i * 360) / turnarounds, kind: "turnaround" as const })),
+  ];
 
-  const settled = await Promise.allSettled(headings.map((h) => buildCandidate(store, counter, input, h)));
+  const settled = await Promise.allSettled(plans.map((p) => buildCandidate(store, counter, input, p.heading, p.kind)));
   // TMAP 이 같은 길을 돌려준 후보는 하나만 남긴다 (서로 다른 코스 3개를 고르기 위해)
   const seen = new Set<string>();
   const deduped = settled
@@ -162,14 +201,17 @@ export async function buildCourses(
     .slice(0, MAX_ELEVATION_CANDIDATES);
   const withGain = await Promise.allSettled(
     finalists.map(async (c) => {
-      const elevations = await fetchElevations(store, counter, c.samples);
+      const elevations = await fetchElevations(store, counter, resample(c.route.path, ELEVATION_STEP_M));
       return { ...c, gainM: calcElevationGain(elevations, 2).gain };
     }),
   );
-  const pool = withGain.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
-  if (pool.length === 0) {
-    const firstErr = withGain.find((r): r is PromiseRejectedResult => r.status === "rejected")?.reason;
-    throw firstErr instanceof Error ? firstErr : new UpstreamError("elevation", "고도를 조회한 후보가 없습니다");
+  let pool = withGain.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+  // 고도를 하나도 못 받으면 요청을 실패시키지 않고 경사 없이 코스를 보여준다
+  const noElevation = pool.length === 0;
+  if (noElevation) {
+    const reason = withGain.find((r): r is PromiseRejectedResult => r.status === "rejected")?.reason;
+    console.warn("[buildCourses] 고도 조회 실패, 경사 없이 진행", reason instanceof Error ? reason.message : reason);
+    pool = finalists;
   }
 
   const { picks, usedTolerance } = pickThree(pool, input.targetM, 0.1);
@@ -177,14 +219,14 @@ export async function buildCourses(
     role: p.role,
     label: ROLE_LABEL[p.role],
     distanceM: Math.round(p.item.distanceM),
-    gainM: Math.round(p.item.gainM),
-    slope: slopeOf(p.item.gainM, p.item.distanceM),
+    gainM: noElevation ? null : Math.round(p.item.gainM),
+    slope: noElevation ? null : slopeOf(p.item.gainM, p.item.distanceM),
     crossings: p.item.crossings,
     stairs: p.item.stairs,
     estSec: input.paceSecPerKm === null ? null : Math.round((p.item.distanceM / 1000) * input.paceSecPerKm),
     path: p.item.route.path.map((pt) => [pt.lat, pt.lng]),
-    note: p.note,
+    note: noteOf(p.role, p.item.turnaround, p.note, noElevation),
   }));
-  const summary = pool.map(({ heading, distanceM, spur, turnsPerKm, straight, crossings, gainM, k, polyM }) => ({ heading, distanceM, spur, turnsPerKm, straight, crossings, gainM, k, polyM }));
+  const summary = pool.map(({ heading, distanceM, spur, turnsPerKm, straight, crossings, gainM, k, polyM, turnaround }) => ({ heading, distanceM, spur, turnsPerKm, straight, crossings, gainM, k, polyM, turnaround }));
   return { courses, usedTolerance, calls: counter, pool: summary };
 }

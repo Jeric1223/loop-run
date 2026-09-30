@@ -10,7 +10,10 @@ import {
   destinationPoint,
   generateLoopWaypoints,
   generateOneWayWaypoints,
+  generateTurnaroundPoint,
+  bearingDeg,
   haversineM,
+  outAndBack,
   overlapRatio,
   parsePace,
   parseTmapRoute,
@@ -18,6 +21,7 @@ import {
   pickThree,
   resample,
   routeShape,
+  scoreCourse,
   targetDistanceM,
   trimSpurs,
   type ParsedRoute,
@@ -71,8 +75,8 @@ const circleOverlap = overlapRatio(circleSamples);
 assert.ok(circleOverlap < 0.1, `원 겹침 ${circleOverlap}`);
 
 // 왕복은 출발·도착 구간과 되돌아가는 지점 근처가 제외되어 100%가 아니라 60% 안팎이 나온다
-const outAndBack = [...line, ...line.slice().reverse()];
-const oabOverlap = overlapRatio(resample(outAndBack, 50));
+const oabLine = [...line, ...line.slice().reverse()];
+const oabOverlap = overlapRatio(resample(oabLine, 50));
 assert.ok(oabOverlap > 0.5, `왕복 겹침 ${oabOverlap}`);
 assert.ok(oabOverlap > circleOverlap + 0.4, `왕복(${oabOverlap})과 원(${circleOverlap})이 구분되어야 함`);
 
@@ -236,6 +240,8 @@ const E = mk('E', 0, 0, 8000); // 거리 +60%: 후보에서 제외되어야 함
     stairs: 0,
     overpasses: 0,
     marks: [mk2('crossing', tip), mk2('crossing', destinationPoint(a, 90, 500))],
+    calm: 0,
+    poor: 0,
     turnTypeCounts: {},
     facilityTypeCounts: {},
   };
@@ -249,6 +255,70 @@ const E = mk('E', 0, 0, 8000); // 거리 +60%: 후보에서 제외되어야 함
   assert.equal(trimSpurs({ ...route, path: resample([daejeon, a], 20), marks: [] }).path.length, resample([daejeon, a], 20).length);
   const oab = { ...route, path: resample([daejeon, a, daejeon], 20), marks: [] };
   assert.equal(trimSpurs(oab), oab, '전체가 왕복이면 원본 유지');
+}
+
+// 11) 반환 코스: 편도 목적지는 목표의 절반 거리, 경로는 절반 지점에서 잘라 되돌아온다
+{
+  const tp = generateTurnaroundPoint(daejeon, 5000, 90);
+  near(haversineM(daejeon, tp), 2500, 1, '편도 목적지 거리');
+  near(bearingDeg(daejeon, tp), 90, 0.5, '편도 목적지 방향');
+
+  // 폴리라인 3000m, TMAP 거리 3300m(비율 1.1) 인 편도 → 목표 5000m 이면 폴리라인 약 2273m 지점에서 반환
+  const a = destinationPoint(daejeon, 90, 1500);
+  const b = destinationPoint(a, 0, 1500);
+  const path = resample([daejeon, a, b], 20);
+  const route: ParsedRoute = {
+    path,
+    distanceM: 3300,
+    durationSec: 2400,
+    crossings: 2,
+    stairs: 1,
+    overpasses: 0,
+    marks: [
+      { kind: 'crossing', at: destinationPoint(daejeon, 90, 700) },
+      { kind: 'stairs', at: destinationPoint(a, 0, 500) },
+      { kind: 'crossing', at: destinationPoint(a, 0, 1400) }, // 반환점 너머 → 빠진다
+    ],
+    calm: 0,
+    poor: 0,
+    turnTypeCounts: {},
+    facilityTypeCounts: {},
+  };
+  const o = outAndBack(route, 5000);
+  near(o.distanceM, 5000, 5, '반환 코스 거리');
+  near(o.durationSec, 2400 * (5000 / 3300), 5, '반환 코스 소요시간');
+  assert.equal(o.crossings, 2, '반환점 앞 횡단보도 1개 × 왕복');
+  assert.equal(o.stairs, 2, '반환점 앞 계단 1개 × 왕복');
+  assert.equal(haversineM(o.path[0], daejeon), 0, '출발점에서 시작');
+  assert.equal(haversineM(o.path[o.path.length - 1], daejeon), 0, '출발점으로 돌아온다');
+  const tip = o.path[(o.path.length - 1) / 2];
+  near(haversineM(a, tip), 2273 - 1500, 5, '반환점은 경로 위 절반 지점');
+  for (let i = 1; i < o.path.length; i++) assert.ok(haversineM(o.path[i - 1], o.path[i]) < 25, '경로가 끊기지 않는다');
+  // 편도가 목표 절반보다 짧으면 끝까지 갔다 온다
+  near(outAndBack(route, 10000).distanceM, 6600, 5, '짧은 편도는 끝까지 왕복');
+}
+
+// 12) roadType: 23(차량 통행 불가)·24(쾌적하지 않음) 구간 비율, 점수 반영
+{
+  const rl = (coords: [number, number][], roadType: number) => ({
+    type: 'Feature' as const,
+    geometry: { type: 'LineString' as const, coordinates: coords },
+    properties: { facilityType: '11', roadType },
+  });
+  const r = parseTmapRoute({
+    type: 'FeatureCollection',
+    features: [
+      rl([[127.38, 36.35], [127.381, 36.35]], 23), // 약 90m
+      rl([[127.381, 36.35], [127.382, 36.35]], 21), // 약 90m
+      rl([[127.382, 36.35], [127.383, 36.35]], 24), // 약 90m
+      rl([[127.383, 36.35], [127.384, 36.35]], 23), // 약 90m
+    ],
+  });
+  near(r.calm, 0.5, 0.01, 'calm 비율');
+  near(r.poor, 0.25, 0.01, 'poor 비율');
+  const base = { distanceM: 5000, targetM: 5000, gainM: 0, crossings: 0, stairs: 0, overlap: 0 };
+  assert.ok(scoreCourse({ ...base, calm: 0.8 }, 'BALANCED') < scoreCourse(base, 'BALANCED'), '보행자도로가 많으면 점수가 낮다(좋다)');
+  assert.ok(scoreCourse({ ...base, poor: 0.5 }, 'BALANCED') > scoreCourse(base, 'BALANCED'), '쾌적하지 않은 도로가 많으면 점수가 높다');
 }
 
 console.log('selftest 통과 ✔');
