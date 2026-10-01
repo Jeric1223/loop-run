@@ -12,6 +12,17 @@
 
 ---
 
+## 화면 미리보기
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/screens/readme-board-dark.png">
+  <img alt="루프런 화면 보드: 홈, 로딩, 코스 결과, 내 코스, 시트, 권한·오류 상태" src="assets/screens/readme-board.png">
+</picture>
+
+GitHub 테마에 맞춰 라이트/다크가 자동으로 바뀐다. 디자인 원본은 [`docs/design/`](docs/design/HANDOFF.md).
+
+---
+
 ## 1. 무엇을 만드나
 
 **문제**: 지도 앱은 A→B 길찾기만 해준다. "오늘 5km 뛰고 싶은데 어디로?"에는 답이 없고, 같은 5km여도 경사와 신호 대기에 따라 체감이 크게 다르다.
