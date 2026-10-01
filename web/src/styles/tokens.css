@@ -22,6 +22,8 @@
   --chip-on-bg: var(--brand-soft); --chip-on-fg: var(--brand-soft-fg); --chip-on-bd: var(--brand);
   --map-bg: oklch(0.88 0.006 250); --map-road: oklch(0.94 0.005 250); --map-tag: oklch(0.94 0.005 250 / .9); --map-casing: oklch(1 0 0);
   --float: oklch(1 0 0); --float-hover: oklch(0.96 0.005 250); --shadow-float: 0 4px 16px rgb(0 0 0 / .16); --shadow-sheet: 0 -8px 32px rgb(0 0 0 / .1); --shadow-card-sel: 0 8px 24px -8px color-mix(in oklch, var(--cc) 50%, transparent);
+  /* 경사 3단계 — 초록=평지 · 노랑=완만 · 빨강=언덕. 사이 구간은 oklab 으로 섞는다. 선택 안 된 코스는 회색 */
+  --g-flat: oklch(0.7 0.15 162); --g-gentle: oklch(0.86 0.17 92); --g-hill: oklch(0.5 0.2 32); --map-unsel: oklch(0.62 0.01 255);
   --sheet-bg: var(--bg); --skel: oklch(0.92 0.006 250); --skel-hi: oklch(0.98 0.004 250);
 }
 
@@ -34,5 +36,6 @@
   --seg-bg: oklch(0.28 0.014 260); --seg-thumb: oklch(0.4 0.016 260); --seg-thumb-sh: 0 2px 8px rgb(0 0 0 / .4);
   --map-bg: oklch(0.3 0.008 260); --map-road: oklch(0.36 0.008 260); --map-tag: oklch(0.24 0.01 260 / .9); --map-casing: oklch(0.19 0.012 260);
   --float: oklch(0.3 0.015 260); --float-hover: oklch(0.36 0.016 260); --shadow-float: 0 4px 16px rgb(0 0 0 / .5); --shadow-sheet: 0 -8px 32px rgb(0 0 0 / .4);
+  --g-flat: oklch(0.76 0.15 162); --g-gentle: oklch(0.9 0.16 95); --g-hill: oklch(0.62 0.21 34); --map-unsel: oklch(0.64 0.01 260);
   --skel: oklch(0.3 0.015 260); --skel-hi: oklch(0.38 0.016 260);
 }

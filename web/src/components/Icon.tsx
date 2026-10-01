@@ -15,6 +15,8 @@ const PATHS = {
       <path d="M20 3.5V9h-5.5" />
     </>
   ),
+  bookmark: <path d="M7 3.5h10a1 1 0 0 1 1 1V20.5l-6-4-6 4V4.5a1 1 0 0 1 1-1Z" />,
+  trash: <path d="M4 7h16M10 3.5h4M6.5 7l.8 12.5a1 1 0 0 0 1 .9h7.4a1 1 0 0 0 1-.9L17.5 7M10 11v5M14 11v5" />,
   minus: <path d="M5 12h14" />,
   plus: <path d="M12 5v14M5 12h14" />,
   x: <path d="M6 6l12 12M18 6 6 18" />,
@@ -54,6 +56,7 @@ const PATHS = {
     </>
   ),
   hill: <path d="M2.5 19.5 9 7l4 7 3-4 5.5 9.5Z" />,
+  swap: <path d="M4 8h15m-4-4 4 4-4 4M20 16H5m4-4-4 4 4 4" />,
   cross: <path d="M4 5.5h16M4 9.5h16M4 13.5h16M4 17.5h16" strokeWidth={2.6} />,
   stairs: <path d="M3 20h5v-5h5v-5h5V5h3" />,
   pin: (
