@@ -2,6 +2,7 @@
 
 import { useState, useSyncExternalStore, type Dispatch, type KeyboardEvent } from "react";
 import { Icon } from "@/components/Icon";
+import { useSavedCourses } from "@/lib/course/saved";
 import { Alert } from "./controls";
 import { DistanceGoal, PaceGoal } from "./GoalPanels";
 import { HomeMap } from "./HomeMap";
@@ -59,13 +60,16 @@ export function Home({
   dispatch,
   onRefresh,
   onMake,
+  onOpenSaved,
 }: {
   s: HomeState;
   dispatch: Dispatch<HomeAction>;
   onRefresh: () => void;
   onMake: () => void;
+  onOpenSaved: () => void;
 }) {
   const online = useOnline();
+  const savedCount = useSavedCourses().length;
   const [sheet, setSheet] = useState<SheetTarget | null>(null);
   const [picker, setPicker] = useState<SheetTarget | null>(null);
 
@@ -86,7 +90,17 @@ export function Home({
           <Icon name="loop" />
           루프런<em>임시</em>
         </div>
-        <ThemeToggle />
+        <div className="tb-act">
+          <button type="button" className="icon-btn" onClick={onOpenSaved} aria-label={savedCount ? `내 코스 ${savedCount}개` : "내 코스"}>
+            <Icon name="bookmark" />
+            {savedCount > 0 && (
+              <span className="cnt" aria-hidden="true">
+                {savedCount}
+              </span>
+            )}
+          </button>
+          <ThemeToggle />
+        </div>
       </header>
       <div className="scroll">
         <h1 className="hero-title">

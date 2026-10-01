@@ -3,7 +3,8 @@
 type KakaoPlace = { place_name: string; address_name: string; road_address_name: string; x: string; y: string };
 type Status = "OK" | "ZERO_RESULT" | "ERROR";
 export type KLatLng = { getLat: () => number; getLng: () => number };
-type KOverlay = { setMap: (m: KMap | null) => void };
+export type KPoint = { x: number; y: number };
+export type KOverlay = { setMap: (m: KMap | null) => void; setPosition?: (p: KLatLng) => void };
 export type KPolyline = KOverlay & { setOptions: (o: object) => void };
 export type KMap = {
   getCenter: () => KLatLng;
@@ -12,6 +13,8 @@ export type KMap = {
   relayout: () => void;
   panBy: (dx: number, dy: number) => void;
   setLevel: (level: number) => void;
+  /** 위·경도 ↔ 지도 컨테이너 픽셀 — 줌과 상관없이 일정한 픽셀 간격을 띄울 때 쓴다 */
+  getProjection: () => { containerPointFromCoords: (c: KLatLng) => KPoint; coordsFromContainerPoint: (p: KPoint) => KLatLng };
 };
 type Kakao = {
   maps: {
@@ -19,6 +22,7 @@ type Kakao = {
     Map: new (el: HTMLElement, opt: { center: KLatLng; level: number }) => KMap;
     LatLng: new (lat: number, lng: number) => KLatLng;
     LatLngBounds: new () => { extend: (p: KLatLng) => void };
+    Point: new (x: number, y: number) => KPoint;
     Polyline: new (opt: object) => KPolyline;
     CustomOverlay: new (opt: { position: KLatLng; content: HTMLElement; yAnchor?: number; zIndex?: number }) => KOverlay;
     event: { addListener: (t: unknown, name: string, cb: () => void) => void };

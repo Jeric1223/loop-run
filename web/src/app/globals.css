@@ -211,10 +211,10 @@ svg{display:block}
 .fab:hover{background:var(--float-hover)}
 .fab svg{width:22px;height:22px}
 .map-chip{position:absolute;top:var(--sp-3);right:var(--sp-3);z-index:3;min-height:44px;display:flex;align-items:center;padding:0 var(--sp-4);border-radius:99px;background:var(--float);box-shadow:var(--shadow-float);font-size:var(--fs-sm);font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
-.slope-legend{position:absolute;top:calc(var(--sp-3) + 44px + var(--sp-2));right:var(--sp-3);z-index:3;width:136px;padding:var(--sp-2) var(--sp-3);border-radius:var(--r-md);background:var(--float);box-shadow:var(--shadow-float);pointer-events:none}
-.slope-bar{display:block;height:8px;border-radius:99px}
-.slope-lbl{display:flex;justify-content:space-between;margin-top:4px;font-size:var(--fs-cap);color:var(--muted)}
-.slope-lbl i{font-style:normal}
+.map-legend{position:absolute;left:var(--sp-3);bottom:var(--sp-3);z-index:3;display:flex;align-items:center;gap:var(--sp-3);padding:0 var(--sp-3);min-height:32px;border-radius:99px;background:var(--float);box-shadow:var(--shadow-float);font-size:var(--fs-cap);font-weight:600;pointer-events:none}
+.map-legend span{display:inline-flex;align-items:center;gap:5px}
+.sw{display:inline-block;width:14px;height:6px;border-radius:99px}
+.lg-dir{color:var(--muted)}
 .route{cursor:pointer}
 .route .line,.route .casing{fill:none;stroke-linejoin:round;transition:stroke-width .35s var(--ease-spring),opacity .3s}
 .route .casing{stroke:var(--map-casing);stroke-width:0;opacity:0}
@@ -236,7 +236,7 @@ svg{display:block}
 .pin.r0{--c:var(--c1);--on:var(--c1-on)}.pin.r1{--c:var(--c2);--on:var(--c2-on)}.pin.r2{--c:var(--c3);--on:var(--c3-on)}
 .start-dot{fill:var(--fg);stroke:var(--map-casing);stroke-width:3}
 .start-lbl rect{fill:var(--fg)}.start-lbl text{fill:var(--bg);font-size:12px;font-weight:700;text-anchor:middle;dominant-baseline:central;letter-spacing:.04em}
-.ripple{fill:none;stroke:var(--fg);stroke-width:2;transform-box:fill-box;transform-origin:center;animation:ripple 2.4s var(--ease-out) infinite}
+.ripple{fill:none;stroke:var(--fg);stroke-width:2;transform-box:fill-box;transform-origin:center;animation:ripple 2.4s var(--ease-out) 3}
 .ripple.b{animation-delay:1.2s}
 @keyframes ripple{from{transform:scale(.6);opacity:.7}to{transform:scale(3);opacity:0}}
 .runner{fill:var(--fg);stroke:var(--map-casing);stroke-width:2.5}
@@ -251,15 +251,14 @@ svg{display:block}
 .cards{flex:1;min-height:0;display:flex;gap:var(--sp-3);padding:var(--sp-2) var(--sp-5) var(--sp-3);overflow:auto;scrollbar-width:none;overscroll-behavior:contain}
 .cards::-webkit-scrollbar{display:none}
 .sheet .source{padding:0 var(--sp-5) var(--sp-2);flex:none}
-.card{position:relative;flex:none;background:var(--surface);border:2px solid var(--border);border-radius:var(--r-card);padding:var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-2);cursor:pointer;outline-offset:3px;transition:transform .4s var(--ease-spring),box-shadow .3s,border-color .2s,background .2s;animation:cardIn .7s var(--ease-spring) both;animation-delay:calc(var(--i,0)*110ms + 500ms)}
-@keyframes cardIn{from{opacity:0;transform:translateY(28px) scale(.96)}}
-.card.i0{--cc:var(--c1)}.card.i1{--cc:var(--c2)}.card.i2{--cc:var(--c3)}
+.card{position:relative;flex:none;background:var(--surface);border:2px solid var(--border);border-radius:var(--r-card);padding:var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-2);cursor:pointer;outline-offset:3px;transition:transform .4s var(--ease-spring),box-shadow .3s,border-color .2s,background .2s;animation:cardIn .45s var(--ease-out) both;animation-delay:calc(var(--i,0)*70ms + 350ms)}
+@keyframes cardIn{from{opacity:0;transform:translateY(16px) scale(.985)}}
+.card{--cc:var(--fg);--cc-on:var(--bg)} /* 코스 색은 경사가 쓴다 — 카드는 중립 */
 .card:hover{border-color:var(--muted)}
 .card[data-sel=true]{border-color:var(--cc);box-shadow:var(--shadow-card-sel)}
 .card-head{display:flex;align-items:center;gap:var(--sp-2);min-height:32px}
 .card-head h3{flex:1;font-size:var(--fs-body);font-weight:700;line-height:1.5}
 .num{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:15px;font-weight:700;background:var(--cc);color:var(--cc-on)}
-.i0 .num{--cc-on:var(--c1-on)}.i1 .num{--cc-on:var(--c2-on)}.i2 .num{--cc-on:var(--c3-on)}
 .pat{flex:none;width:34px;height:10px;color:var(--cc)}
 .check{flex:none;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--fg);color:var(--bg);transform:scale(0);transition:transform .45s var(--ease-spring)}
 .check svg{width:14px;height:14px}
@@ -317,13 +316,13 @@ svg{display:block}
 .state-ic[data-anim=radar]::before{animation:radar 2.4s var(--ease-out) infinite}
 .state-ic[data-anim=radar]::after{animation:radar 2.4s var(--ease-out) 1.2s infinite}
 @keyframes radar{from{transform:scale(.8);opacity:.7}to{transform:scale(1.7);opacity:0}}
-.state-ic[data-anim=shake] svg{animation:shake 2.6s ease-in-out infinite}
+.state-ic[data-anim=shake] svg{animation:shake 2.6s ease-in-out 2}
 @keyframes shake{0%,70%,100%{transform:none}74%{transform:translateX(-6px) rotate(-6deg)}78%{transform:translateX(6px) rotate(6deg)}82%{transform:translateX(-4px) rotate(-3deg)}86%{transform:translateX(3px)}}
-.state-ic[data-anim=bob] svg{animation:bob 3s ease-in-out infinite}
+.state-ic[data-anim=bob] svg{animation:bob 3s ease-in-out 3}
 @keyframes bob{50%{transform:translateY(-8px)}}
-.state-ic[data-anim=wobble] svg{animation:wobble 3.2s ease-in-out infinite}
+.state-ic[data-anim=wobble] svg{animation:wobble 3.2s ease-in-out 2}
 @keyframes wobble{0%,60%,100%{transform:none}70%{transform:rotate(-10deg)}80%{transform:rotate(10deg)}90%{transform:rotate(-4deg)}}
-.state-ic[data-anim=blink] .wf{animation:wfblink 1.8s infinite}
+.state-ic[data-anim=blink] .wf{animation:wfblink 1.8s 4}
 .state-ic[data-anim=blink] .wf:nth-of-type(2){animation-delay:.25s}
 @keyframes wfblink{0%,100%{opacity:1}50%{opacity:.15}}
 .state-body h1{font-size:var(--fs-h1);font-weight:800;line-height:1.4;white-space:pre-line}
@@ -431,10 +430,64 @@ svg{display:block}
 /* 카카오 지도 (결과 화면) */
 .kmap{position:absolute;inset:0}
 .kpin{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:14px;font-weight:700;cursor:pointer;border:2.5px solid var(--map-casing);transition:transform .3s var(--ease-out)}
-.kpin.r0{background:var(--c1);color:var(--c1-on)}.kpin.r1{background:var(--c2);color:var(--c2-on)}.kpin.r2{background:var(--c3);color:var(--c3-on)}
+.kpin{background:var(--fg);color:var(--bg)}
 .kpin[data-sel=false]{transform:scale(.78)}.kpin[data-sel=true]{transform:scale(1.2)}
 .kpt{padding:0 10px;height:22px;line-height:22px;border-radius:99px;font-size:12px;font-weight:700;letter-spacing:.04em;white-space:nowrap;margin-bottom:6px}
 .kpt-s{background:var(--fg);color:var(--bg)}
 .kpt-e{background:var(--bg);color:var(--fg);border:2px solid var(--fg);line-height:18px}
 
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+
+/* 경사 시안 — 선택 코스 오버레이(카카오 CustomOverlay 내용) */
+.kchev{width:8px;height:8px;display:grid;place-items:center;color:oklch(1 0 0);opacity:.92;pointer-events:none}
+.kchev.dk{color:oklch(0.3 0.03 90)}
+.khill{padding:0 10px;height:24px;line-height:24px;border-radius:99px;background:var(--g-hill);color:oklch(0.99 0 0);font-size:12px;font-weight:700;white-space:nowrap;box-shadow:var(--shadow-float);pointer-events:none}
+.kdot{width:16px;height:16px;border-radius:50%;background:var(--fg);border:3px solid var(--map-casing);box-shadow:var(--shadow-float);pointer-events:none}
+
+/* 고도 변화 차트 */
+.elev{flex:none;background:var(--surface);border-radius:var(--r-card);padding:var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-2)}
+.elev-head{display:flex;align-items:baseline;justify-content:space-between;gap:var(--sp-3)}
+.elev-head h3{font-size:var(--fs-sm);font-weight:700}
+.elev-read{font-size:var(--fs-cap);color:var(--muted);font-variant-numeric:tabular-nums;text-align:right}
+.elev-plot{position:relative;height:88px;touch-action:none;cursor:crosshair;border-radius:var(--r-sm);outline-offset:3px}
+.elev-plot svg{display:block;width:100%;height:100%}
+.elev-plot .ar{transition:opacity .15s}
+.elev-plot .ridge{fill:none;stroke:var(--fg);stroke-width:1.5;vector-effect:non-scaling-stroke;stroke-linejoin:round}
+.elev-plot .cur{stroke:var(--fg);stroke-width:1;vector-effect:non-scaling-stroke}
+.cur-dot{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:var(--fg);border:2px solid var(--surface);pointer-events:none}
+.elev-axis{display:flex;justify-content:space-between;font-size:var(--fs-cap);color:var(--muted)}
+
+/* 카드 요약 */
+.sum{font-size:13px;line-height:1.5;color:var(--muted)}
+
+/* 고도 차트 — 코스를 고르면 왼쪽에서 오른쪽으로 채워져요 */
+.elev-plot svg{animation:elevIn .55s var(--ease-out) .1s both}
+@keyframes elevIn{from{clip-path:inset(-4px 100% -4px 0)}}
+
+/* 저장한 코스 */
+.save-btn{flex:none;width:44px;height:44px;margin:-8px -8px -8px 0;border:0;border-radius:50%;background:transparent;color:var(--muted);display:grid;place-items:center;cursor:pointer;transition:background .15s,color .15s,transform .15s var(--ease-out)}
+.save-btn:hover{background:var(--surface-2)}
+.save-btn:active{transform:scale(.88)}
+.save-btn svg{width:22px;height:22px;transition:fill .2s}
+.save-btn[aria-pressed=true]{color:var(--brand)}
+.save-btn[aria-pressed=true] svg{fill:currentColor}
+.save-btn.pop svg{animation:savePop .32s var(--ease-out)}
+@keyframes savePop{40%{transform:scale(1.25)}}
+.tb-act{display:flex;align-items:center}
+.tb-act .icon-btn{position:relative}
+.tb-act .cnt{position:absolute;top:4px;right:2px;min-width:18px;height:18px;padding:0 5px;border-radius:99px;background:var(--brand);color:var(--on-brand);font-size:11px;font-weight:700;line-height:18px;text-align:center;box-sizing:border-box}
+.toast.act{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);text-align:left;animation-duration:4.4s;pointer-events:auto}
+.toast-btn{flex:none;min-height:44px;margin:-10px -8px -10px 0;padding:0 12px;border:0;border-radius:var(--r-sm);background:transparent;color:var(--bg);font:inherit;font-weight:700;text-decoration:underline;text-underline-offset:4px;cursor:pointer}
+.sv-gap{width:44px}
+.sv-title{flex:1;text-align:center;font-size:var(--fs-body);font-weight:700}
+.saved-list{list-style:none;margin:0 auto;padding:0;width:min(560px,100%);display:flex;flex-direction:column;gap:var(--sp-3)}
+.sv{display:flex;align-items:center;gap:var(--sp-1);padding:var(--sp-1) var(--sp-1) var(--sp-1) var(--sp-4);border-radius:var(--r-card);background:var(--surface);animation:cardIn .4s var(--ease-out) both;animation-delay:calc(var(--i,0)*50ms)}
+.sv-open{flex:1;min-width:0;min-height:56px;padding:var(--sp-2) 0;display:flex;flex-direction:column;align-items:flex-start;gap:4px;border:0;background:none;color:var(--fg);font:inherit;text-align:left;cursor:pointer;border-radius:var(--r-sm)}
+.sv-top{display:flex;align-items:center;gap:var(--sp-2);font-size:var(--fs-sm);font-weight:700}
+.sv-top .num{width:24px;height:24px;font-size:13px;--cc:var(--fg);--cc-on:var(--bg)}
+.sv-dist{font-size:26px;font-weight:800;letter-spacing:-.01em}
+.sv-dist small{margin-left:2px;font-size:14px;font-weight:600;color:var(--muted)}
+.sv-meta{font-size:13px;line-height:1.5;color:var(--muted)}
+.sv-empty{width:min(560px,100%);margin:0 auto;padding:72px 0 0;display:flex;flex-direction:column;align-items:center;gap:var(--sp-2);text-align:center}
+.sv-empty h1{font-size:22px;font-weight:800;line-height:1.4}
+.sv-empty p{margin-bottom:var(--sp-4);font-size:var(--fs-body);line-height:1.6;color:var(--muted)}

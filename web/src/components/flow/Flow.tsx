@@ -8,10 +8,12 @@ import { CourseRequestError, requestCourses } from "@/lib/course/client";
 import { reverseGeocode } from "@/lib/kakao";
 import { LOW_ACCURACY_M, getPosition, permissionState, type Fix } from "@/lib/geo";
 import { Loading } from "./Loading";
-import { Result, type ResultGoal } from "./Result";
+import type { SavedCourse } from "@/lib/course/saved";
+import { Result, type ResultGoal, type ToastFn } from "./Result";
+import { SavedList } from "./SavedList";
 import { StateScreen, type StateAction, type StateName } from "./StateScreen";
 
-type View = { name: "home" } | { name: "loading" } | { name: "result"; courses: CourseResult[]; goal: ResultGoal } | { name: StateName };
+type View = { name: "home" } | { name: "loading" } | { name: "result"; courses: CourseResult[]; goal: ResultGoal; fromSaved?: boolean } | { name: "saved" } | { name: StateName };
 
 const coordsOf = (p: Place | null) => (p && p.lat != null && p.lng != null ? { lat: p.lat, lng: p.lng } : null);
 
@@ -19,15 +21,15 @@ const coordsOf = (p: Place | null) => (p && p.lat != null && p.lng != null ? { l
 export function Flow() {
   const [s, dispatch] = useReducer(homeReducer, initialHomeState);
   const [view, setView] = useState<View>({ name: "home" });
-  const [toast, setToast] = useState<{ id: number; msg: string } | null>(null);
+  const [toast, setToast] = useState<{ id: number; msg: string; action?: { label: string; onClick: () => void } } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
-  const showToast = (msg: string) => {
+  const showToast: ToastFn = (msg, action) => {
     const id = Date.now();
-    setToast({ id, msg });
-    setTimeout(() => setToast((t) => (t?.id === id ? null : t)), 2700);
+    setToast({ id, msg, action });
+    setTimeout(() => setToast((t) => (t?.id === id ? null : t)), action ? 4400 : 2700);
   };
 
   /** 위치를 측정해 홈 상태에 반영한다. 실패하면 null */
@@ -47,7 +49,7 @@ export function Flow() {
 
   const run = async (start: { lat: number; lng: number }) => {
     const end = coordsOf(s.end);
-    const goal: ResultGoal = { targetM: targetM(s), paceSecPerKm: activePace(s), start, end };
+    const goal: ResultGoal = { targetM: targetM(s), paceSecPerKm: activePace(s), start, end, startName: s.start.name, endName: s.end?.name ?? null };
     abortRef.current?.abort();
     const ac = new AbortController();
     abortRef.current = ac;
@@ -90,18 +92,33 @@ export function Flow() {
     setView({ name: "home" });
   };
 
+  const openSaved = (v: SavedCourse) => setView({ name: "result", courses: [v.course], goal: v.goal, fromSaved: true });
+
   return (
     <div className="stage">
       <div className="phone">
-        {view.name === "home" && <Home s={s} dispatch={dispatch} onRefresh={refresh} onMake={make} />}
+        {view.name === "home" && <Home s={s} dispatch={dispatch} onRefresh={refresh} onMake={make} onOpenSaved={() => setView({ name: "saved" })} />}
+        {view.name === "saved" && <SavedList onBack={() => setView({ name: "home" })} onOpen={openSaved} onToast={showToast} />}
         {view.name === "loading" && <Loading onCancel={cancel} />}
-        {view.name === "result" && <Result courses={view.courses} goal={view.goal} onBack={() => setView({ name: "home" })} />}
+        {view.name === "result" && <Result courses={view.courses} goal={view.goal} fromSaved={view.fromSaved} onToast={showToast} onBack={() => setView(view.fromSaved ? { name: "saved" } : { name: "home" })} />}
         {(view.name === "perm" || view.name === "denied" || view.name === "fail" || view.name === "quota" || view.name === "offline") && (
           <StateScreen name={view.name} onAction={onStateAction} />
         )}
         {toast && (
-          <div key={toast.id} className="toast" role="status">
-            {toast.msg}
+          <div key={toast.id} className={toast.action ? "toast act" : "toast"} role="status">
+            <span>{toast.msg}</span>
+            {toast.action && (
+              <button
+                type="button"
+                className="toast-btn"
+                onClick={() => {
+                  toast.action!.onClick();
+                  setToast(null);
+                }}
+              >
+                {toast.action.label}
+              </button>
+            )}
           </div>
         )}
       </div>
