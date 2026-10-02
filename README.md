@@ -3,7 +3,7 @@
 > 출발점과 목표 거리(또는 페이스 × 시간)만 정하면, **출발점으로 돌아오는 러닝 코스 3개**를 만들어 준다.
 > 경사, 횡단보도 수, 계단, 같은 길을 되돌아오는 비율을 따져서 고른다.
 
-**[데모 열기 → loop-run-eight.vercel.app](https://loop-run-eight.vercel.app/)** · [개발기 (velog)](https://velog.io/@hoohoo0889/%EB%91%94%EC%82%B0%EB%8F%99-%EB%9F%B0%EB%8B%9D-%EC%BD%94%EC%8A%A4-%EA%B2%80%EC%83%89%ED%95%98%EB%8B%A4-%EC%A7%80%EC%B3%90%EC%84%9C-%EC%BD%94%EC%8A%A4-%EC%B6%94%EC%B2%9C-%EC%95%B1%EC%9D%84-%EB%A7%8C%EB%93%A4%EC%97%88%EC%96%B4%EC%9A%94) · 모바일 화면 기준 · 한국 지역만 지원
+**[데모 열기 → loop-run-eight.vercel.app](https://loop-run-eight.vercel.app/)** ·[ [개발기 (velog)](https://velog.io/@hoohoo0889/%EB%91%94%EC%82%B0%EB%8F%99-%EB%9F%B0%EB%8B%9D-%EC%BD%94%EC%8A%A4-%EA%B2%80%EC%83%89%ED%95%98%EB%8B%A4-%EC%A7%80%EC%B3%90%EC%84%9C-%EC%BD%94%EC%8A%A4-%EC%B6%94%EC%B2%9C-%EC%95%B1%EC%9D%84-%EB%A7%8C%EB%93%A4%EC%97%88%EC%96%B4%EC%9A%94) ](https://velog.io/@hoohoo0889/%ED%86%A0%EC%9D%B4-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8-%EB%B0%9C%ED%91%9C-%EC%BD%94%EC%8A%A4-%EC%B6%94%EC%B2%9C-%EC%95%B1%EC%9D%84-%EB%A7%8C%EB%93%A4%EC%97%88%EC%96%B4%EC%9A%94)· 모바일 화면 기준 · 한국 지역만 지원
 
 | | |
 | --- | --- |
