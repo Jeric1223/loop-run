@@ -74,8 +74,8 @@ export function StateScreen({ name, onAction }: { name: StateName; onAction: (a:
     <section className="screen state">
       <header className="topbar">
         <div className="logo">
-          <Icon name="loop" />
-          루프런<em>임시</em>
+          <img src="/logo.png" alt="" width={26} height={26} />
+          루프런
         </div>
         <ThemeToggle />
       </header>
