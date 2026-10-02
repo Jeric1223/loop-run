@@ -27,7 +27,7 @@ import {
   trimSpurs,
   type ParsedRoute,
 } from './web/src/lib/course/lib';
-import { slopeColor } from './web/src/components/flow/slopeColor';
+import { levelCss, levelHex } from './web/src/components/flow/slopeColor';
 
 const daejeon: LatLng = { lat: 36.3504, lng: 127.3845 };
 const near = (actual: number, expected: number, tol: number, label: string) =>
@@ -332,11 +332,16 @@ const E = mk('E', 0, 0, 8000); // 거리 +60%: 후보에서 제외되어야 함
   gradeProfile(pts, [25, 20, 15, 10, 5, 0]).forEach((g) => near(g, -5, 0.1, '내리막 경사율'));
   assert.ok(gradeProfile(pts, [0, 100, 0, 100, 0, 100]).every((g) => Math.abs(g) <= 15), '±15% 로 자른다');
   assert.deepEqual(gradeProfile([daejeon], [1]), []);
-  assert.equal(slopeColor(-20), '#2563eb');
-  assert.equal(slopeColor(0), '#22c55e');
-  assert.equal(slopeColor(99), '#dc2626');
-  assert.notEqual(slopeColor(1.5), slopeColor(0));
-  assert.match(slopeColor(1.5), /^#[0-9a-f]{6}$/);
+  assert.equal(levelCss(-1), 'var(--g-flat)');
+  assert.equal(levelCss(1), 'var(--g-gentle)');
+  assert.equal(levelCss(99), 'var(--g-hill)');
+  assert.equal(levelCss(1.5), 'color-mix(in oklab, var(--g-hill) 50%, var(--g-gentle))');
+  // 검정 → 회색 → 흰색 램프(oklab)로 폴리라인 색 보간 확인
+  const ramp: [number, number, number][] = [[0, 0, 0], [0.5, 0, 0], [1, 0, 0]];
+  assert.equal(levelHex(ramp, -1), '#000000');
+  assert.equal(levelHex(ramp, 99), '#ffffff');
+  assert.notEqual(levelHex(ramp, 1.5), levelHex(ramp, 1));
+  assert.match(levelHex(ramp, 1.5), /^#[0-9a-f]{6}$/);
 }
 
 console.log('selftest 통과 ✔');
