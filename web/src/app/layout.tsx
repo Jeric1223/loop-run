@@ -3,7 +3,7 @@ import "../styles/tokens.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "루프런(임시)",
+  title: "루프런",
   description: "출발점으로 돌아오는 러닝 코스를 추천해요",
 };
 

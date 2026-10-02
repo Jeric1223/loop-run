@@ -87,8 +87,8 @@ export function Home({
     <section className="screen home" onKeyDown={onKeyDown}>
       <header className="topbar">
         <div className="logo">
-          <Icon name="loop" />
-          루프런<em>임시</em>
+          <img src="/logo.png" alt="" width={26} height={26} />
+          루프런
         </div>
         <div className="tb-act">
           <button type="button" className="icon-btn" onClick={onOpenSaved} aria-label={savedCount ? `내 코스 ${savedCount}개` : "내 코스"}>
